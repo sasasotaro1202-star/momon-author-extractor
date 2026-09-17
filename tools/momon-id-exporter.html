@@ -1,0 +1,8 @@
+<!doctype html><meta charset="utf-8"><title>momon ID exporter</title>
+<h1>momon ID exporter</h1>
+<p>Safariでmomonのマイリストを開いた状態で、このページのJavaScriptをショートカット「WebページでJavaScriptを実行」に貼り付けてください。</p>
+<p>抽出結果はIDだけです。Cookieや作品本文は送信しません。</p>
+<pre id="script"></pre>
+<script>
+document.querySelector('#script').textContent = `(function(){\nconst ids=[...new Set((document.documentElement.innerHTML.match(/\\bmo\\d{5,}\\b/gi)||[]).map(x=>x.toLowerCase()))];\ncompletion(['MOMON_ID_EXPORT_V1','COUNT='+ids.length,...ids].join('\\n'));\n})();`;
+</script>
