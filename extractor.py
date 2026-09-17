@@ -33,7 +33,7 @@ def fetch(url: str, timeout: float, retries: int, base_delay: float) -> str:
     last: Exception | None = None
     for attempt in range(retries + 1):
         try:
-            req = Request(url, headers={"User-Agent": "momon-author-extractor/1.1"})
+            req = Request(url, headers={"User-Agent": "momon-author-extractor/1.2"})
             with urlopen(req, timeout=timeout) as r:
                 return r.read().decode("utf-8", "replace")
         except (HTTPError, URLError, TimeoutError, OSError) as exc:
@@ -46,8 +46,11 @@ def fetch(url: str, timeout: float, retries: int, base_delay: float) -> str:
 
 def parse_page(page: str) -> tuple[str, str]:
     tm = TITLE_RE.search(page)
-    am = AUTHOR_RE.search(page)
-    return (clean(tm.group(1)) if tm else "", clean(am.group(1)) if am else "")
+    authors = [clean(x) for x in AUTHOR_RE.findall(page) if clean(x)]
+    # Preserve every explicit 【作者】 block. Some magazine pages expose one
+    # block per contributor, so search() would silently discard most authors.
+    author = " | ".join(dict.fromkeys(authors))
+    return (clean(tm.group(1)) if tm else "", author)
 
 
 def load_ids(path: Path) -> list[str]:
@@ -59,7 +62,7 @@ def load_ids(path: Path) -> list[str]:
 
 def save_checkpoint(path: Path, ids: list[str], records: dict, failures: dict) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
-    data = {"version": 2, "total": len(ids), "records": records, "failures": failures}
+    data = {"version": 3, "total": len(ids), "records": records, "failures": failures}
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(path)
 
@@ -92,9 +95,6 @@ def main() -> int:
 
     for pos, work_id in enumerate(ids, 1):
         existing = records.get(work_id, {})
-        # Successful records are immutable and skipped. Authorless records are
-        # deliberately retried on the next run, because a transient page failure
-        # must never become a permanent blank author.
         if existing.get("author", "").strip():
             continue
 
@@ -130,9 +130,10 @@ def main() -> int:
 
     authors: list[str] = []
     for r in ordered:
-        a = r["author"].strip()
-        if a and a not in authors:
-            authors.append(a)
+        for a in re.split(r"\s*\|\s*", r["author"].strip()):
+            a = a.strip()
+            if a and a not in authors:
+                authors.append(a)
     (out / "authors.txt").write_text("\n".join(f"{i}. {a}" for i, a in enumerate(authors, 1)) + ("\n" if authors else ""), encoding="utf-8")
 
     with (out / "failures.csv").open("w", encoding="utf-8-sig", newline="") as f:
