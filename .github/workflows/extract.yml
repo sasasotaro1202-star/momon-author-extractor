@@ -1,0 +1,48 @@
+name: Extract momon authors
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'data/ids.txt'
+      - 'extractor.py'
+      - '.github/workflows/extract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run extractor
+        run: python extractor.py --ids-file data/ids.txt --output-dir output --checkpoint output/checkpoint.json
+
+      - name: Validate expected input count
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          ids = list(dict.fromkeys(re.findall(r'\bmo\d{5,}\b', Path('data/ids.txt').read_text(encoding='utf-8', errors='replace'), re.I)))
+          print(f'Input unique IDs: {len(ids)}')
+          if len(ids) != 627:
+              raise SystemExit(f'Expected exactly 627 unique IDs, got {len(ids)}')
+          PY
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: momon-results
+          path: output/
+          if-no-files-found: warn
+          retention-days: 30
