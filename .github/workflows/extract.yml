@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: momon-author-extraction
+  cancel-in-progress: false
+
 jobs:
   extract:
     runs-on: ubuntu-latest
@@ -24,25 +28,39 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Validate input
+      - name: Validate exactly 627 unique IDs before network work
         run: |
           python - <<'PY'
           import re
           from pathlib import Path
-          ids = list(dict.fromkeys(re.findall(r'\bmo\d{5,}\b', Path('data/ids.txt').read_text(encoding='utf-8', errors='replace'), re.I)))
+          text = Path('data/ids.txt').read_text(encoding='utf-8', errors='replace')
+          ids = list(dict.fromkeys(re.findall(r'\bmo\d{5,}\b', text, re.I)))
           print(f'Input unique IDs: {len(ids)}')
           if len(ids) != 627:
               raise SystemExit(f'Expected exactly 627 unique IDs, got {len(ids)}')
           PY
 
-      - name: Run extractor
+      - name: Run extractor (resumable)
         run: python extractor.py --ids-file data/ids.txt --output-dir output --checkpoint output/checkpoint.json
+
+      - name: Validate final result
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          s = json.loads(Path('output/summary.json').read_text(encoding='utf-8'))
+          print(json.dumps(s, ensure_ascii=False, indent=2))
+          if s.get('expected') != 627 or s.get('records') != 627:
+              raise SystemExit('Final result does not contain exactly 627 records')
+          if s.get('failures') != 0 or not s.get('complete'):
+              raise SystemExit(f"Extraction incomplete: failures={s.get('failures')}, complete={s.get('complete')}")
+          PY
 
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: momon-results
+          name: momon-results-${{ github.run_number }}
           path: output/
           if-no-files-found: warn
           retention-days: 30
