@@ -4,9 +4,8 @@
 Input: data/ids.txt (one moXXXXXXXX ID per line) or --ids-file.
 Output: output/works.csv, output/authors.txt, output/failures.csv, output/summary.json.
 
-The script deliberately does not require an authenticated mylist session: the private
-mylist is used only to obtain the saved IDs. Individual work pages are fetched from the
-public site. No guessed author values are written.
+The private mylist is used only to obtain saved IDs. Individual work pages are fetched
+from the public site. No author value is guessed when the site does not expose one.
 """
 from __future__ import annotations
 
@@ -97,20 +96,33 @@ def main() -> int:
     for pos, work_id in enumerate(ids, 1):
         if work_id in records:
             continue
-        urls = [f"https://momon-ga.com/fanzine/{work_id}/", f"https://momon-ga.com/magazine/{work_id}/"]
         title = author = ""
-        error = ""
-        for url in urls:
+        errors = []
+        # Try both known page families. We continue to the fallback whenever the
+        # primary page has no explicit author field, even if it has a title.
+        for kind in ("fanzine", "magazine"):
+            url = f"https://momon-ga.com/{kind}/{work_id}/"
             try:
                 page = fetch(url, args.timeout, args.retries, args.delay)
-                title, author = parse_page(page)
-                if title or author:
+                t, a = parse_page(page)
+                if not title and t:
+                    title = t
+                if a:
+                    author = a
                     break
             except Exception as exc:
-                error = str(exc)
+                errors.append(f"{kind}: {exc}")
+
         records[work_id] = {"id": work_id, "title": title, "author": author}
         if not author:
-            failures[work_id] = {"id": work_id, "title": title, "error": error or "author field not found"}
+            failures[work_id] = {
+                "id": work_id,
+                "title": title,
+                "error": "; ".join(errors) or "author field not found",
+            }
+        else:
+            failures.pop(work_id, None)
+
         checkpoint = {"version": 1, "total": len(ids), "records": records, "failures": failures}
         checkpoint_path.write_text(json.dumps(checkpoint, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"[{pos}/{len(ids)}] {work_id} author={author or '(not found)'}", flush=True)
@@ -119,21 +131,35 @@ def main() -> int:
     ordered = [records[x] for x in ids if x in records]
     with (out / "works.csv").open("w", encoding="utf-8-sig", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["id", "title", "author"])
-        w.writeheader(); w.writerows(ordered)
+        w.writeheader()
+        w.writerows(ordered)
 
     authors = []
     for r in ordered:
         a = r["author"].strip()
         if a and a not in authors:
             authors.append(a)
-    (out / "authors.txt").write_text("\n".join(f"{i}. {a}" for i, a in enumerate(authors, 1)) + "\n", encoding="utf-8")
+    (out / "authors.txt").write_text(
+        "\n".join(f"{i}. {a}" for i, a in enumerate(authors, 1)) + "\n",
+        encoding="utf-8",
+    )
 
     with (out / "failures.csv").open("w", encoding="utf-8-sig", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["id", "title", "error"])
-        w.writeheader(); w.writerows(failures.values())
+        w.writeheader()
+        w.writerows(failures.values())
 
-    summary = {"expected": len(ids), "records": len(ordered), "authors_unique": len(authors), "failures": len(failures), "authorless": sum(not r["author"] for r in ordered), "complete": len(ordered) == len(ids) and not failures}
-    (out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    summary = {
+        "expected": len(ids),
+        "records": len(ordered),
+        "authors_unique": len(authors),
+        "failures": len(failures),
+        "authorless": sum(not r["author"] for r in ordered),
+        "complete": len(ordered) == len(ids) and not failures,
+    }
+    (out / "summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     print(json.dumps(summary, ensure_ascii=False))
     return 0
 
