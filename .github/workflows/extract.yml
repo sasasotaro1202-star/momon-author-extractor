@@ -43,7 +43,7 @@ jobs:
       - name: Run extractor (resumable)
         run: python extractor.py --ids-file data/ids.txt --output-dir output --checkpoint output/checkpoint.json
 
-      - name: Validate final result
+      - name: Validate 627 records and no fetch failures
         run: |
           python - <<'PY'
           import json
@@ -52,8 +52,10 @@ jobs:
           print(json.dumps(s, ensure_ascii=False, indent=2))
           if s.get('expected') != 627 or s.get('records') != 627:
               raise SystemExit('Final result does not contain exactly 627 records')
-          if s.get('failures') != 0 or not s.get('complete'):
-              raise SystemExit(f"Extraction incomplete: failures={s.get('failures')}, complete={s.get('complete')}")
+          if s.get('fetch_failed') != 0 or not s.get('complete'):
+              raise SystemExit(f"Extraction incomplete: fetch_failed={s.get('fetch_failed')}, complete={s.get('complete')}")
+          if s.get('author_found', 0) + s.get('not_exposed', 0) != 627:
+              raise SystemExit('Every record must be AUTHOR_FOUND or NOT_EXPOSED')
           PY
 
       - name: Upload results
