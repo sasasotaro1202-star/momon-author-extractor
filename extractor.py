@@ -95,37 +95,60 @@ def main() -> int:
 
     for pos, work_id in enumerate(ids, 1):
         existing = records.get(work_id, {})
+        if existing.get("status") in {"AUTHOR_FOUND", "NOT_EXPOSED"}:
+            continue
         if existing.get("author", "").strip():
+            existing["status"] = "AUTHOR_FOUND"
             continue
 
         title = existing.get("title", "")
         author = ""
         errors: list[str] = []
+        successful_page = False
+        source_url = ""
+        page_kind = ""
         for kind in ("fanzine", "magazine"):
             url = f"https://momon-ga.com/{kind}/{work_id}/"
             try:
                 page = fetch(url, args.timeout, args.retries, args.delay)
+                successful_page = True
+                if not source_url:
+                    source_url = url
+                    page_kind = kind
                 t, a = parse_page(page)
                 if t and not title:
                     title = t
                 if a:
                     author = a
+                    source_url = url
+                    page_kind = kind
                     break
             except Exception as exc:
                 errors.append(f"{kind}: {exc}")
 
-        records[work_id] = {"id": work_id, "title": title, "author": author}
         if author:
-            failures.pop(work_id, None)
+            status = "AUTHOR_FOUND"
+            error = ""
+        elif successful_page:
+            status = "NOT_EXPOSED"
+            error = "public page fetched, but explicit 【作者】 field not found"
         else:
-            failures[work_id] = {"id": work_id, "title": title, "error": "; ".join(errors) or "author field not found"}
+            status = "FETCH_FAILED"
+            error = "; ".join(errors) or "page fetch failed"
+
+        records[work_id] = {"id": work_id, "title": title, "author": author, "status": status, "source_url": source_url, "page_kind": page_kind, "error": error}
+        if status == "FETCH_FAILED":
+            failures[work_id] = records[work_id]
+        else:
+            failures.pop(work_id, None)
         save_checkpoint(checkpoint_path, ids, records, failures)
         print(f"[{pos}/{len(ids)}] {work_id} author={author or '(not found)'}", flush=True)
         time.sleep(args.delay)
 
     ordered = [records[x] for x in ids if x in records]
+    fields = ["id", "title", "author", "status", "source_url", "page_kind", "error"]
     with (out / "works.csv").open("w", encoding="utf-8-sig", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["id", "title", "author"])
+        w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader(); w.writerows(ordered)
 
     authors: list[str] = []
@@ -137,16 +160,19 @@ def main() -> int:
     (out / "authors.txt").write_text("\n".join(f"{i}. {a}" for i, a in enumerate(authors, 1)) + ("\n" if authors else ""), encoding="utf-8")
 
     with (out / "failures.csv").open("w", encoding="utf-8-sig", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["id", "title", "error"])
+        w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader(); w.writerows(failures.values())
 
+    counts = {s: sum(r.get("status") == s for r in ordered) for s in ("AUTHOR_FOUND", "NOT_EXPOSED", "FETCH_FAILED")}
     summary = {
         "expected": len(ids),
         "records": len(ordered),
         "authors_unique": len(authors),
-        "failures": len(failures),
-        "authorless": sum(not r["author"] for r in ordered),
-        "complete": len(ordered) == len(ids) and not failures,
+        "author_found": counts["AUTHOR_FOUND"],
+        "not_exposed": counts["NOT_EXPOSED"],
+        "fetch_failed": counts["FETCH_FAILED"],
+        "failures": counts["FETCH_FAILED"],
+        "complete": len(ordered) == len(ids) and counts["FETCH_FAILED"] == 0,
     }
     (out / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False))
