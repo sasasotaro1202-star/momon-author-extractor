@@ -178,9 +178,6 @@ async function scanFolderTree() {
           await visit(depth+1,[...ancestry,label]);
           if(stopped) return;
           history.back();
-          if(!await waitForPath(pageKey()===parent ? "__never__" : pageKey(), 1)){
-            // The path at this point is the child path; wait explicitly for the parent.
-          }
           const backEnd=Date.now()+9000;
           while(Date.now()<backEnd && pageKey()!==parent) await sleep(100);
           if(pageKey()!==parent){
