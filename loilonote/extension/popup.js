@@ -1,118 +1,166 @@
-const button = document.getElementById("capture");
+const captureButton = document.getElementById("capture");
+const exportButton = document.getElementById("export");
 const status = document.getElementById("status");
 
-button.addEventListener("click", async () => {
-  button.disabled = true;
-  status.textContent = "ページを読み取っています…";
-  let objectUrl = null;
+const clean = (value) => (value || "").replace(/\s+/g, " ").trim();
+const stamp = () => new Date().toISOString().replace(/[:.]/g, "-");
+const saveBlob = async (blob, filename) => {
+  const url = URL.createObjectURL(blob);
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id || !tab.url?.startsWith("https://loilonote.app/")) {
-      throw new Error("ロイロノートのページを開いてから実行してください。");
-    }
-
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => {
-        const isVisible = (el) => {
-          const style = getComputedStyle(el);
-          const rect = el.getBoundingClientRect();
-          return style.display !== "none" &&
-            style.visibility !== "hidden" &&
-            Number(style.opacity) !== 0 &&
-            rect.width > 0 && rect.height > 0;
-        };
-        const clean = (value) => (value || "").replace(/\\s+/g, " ").trim();
-        const visible = [...document.querySelectorAll("body *")].filter(isVisible);
-
-        const links = [...document.querySelectorAll("a[href]")]
-          .filter(isVisible)
-          .map((a) => ({
-            text: clean(a.innerText || a.getAttribute("aria-label") || a.title),
-            href: a.href
-          }))
-          .filter((x) => x.href.startsWith(location.origin));
-
-        // LoiLoNoteの授業カード等は、a/button以外の要素がクリック対象の場合がある。
-        // クリックや画面遷移は行わず、可視要素の属性だけを調査する。
-        const interactive = visible
-          .filter((el) =>
-            el.matches("a,button,[role],[tabindex],[onclick]") ||
-            getComputedStyle(el).cursor === "pointer"
-          )
-          .map((el) => {
-            const rect = el.getBoundingClientRect();
-            return {
-              tag: el.tagName.toLowerCase(),
-              role: el.getAttribute("role") || "",
-              text: clean(el.innerText || el.getAttribute("aria-label") || el.title),
-              ariaLabel: el.getAttribute("aria-label") || "",
-              title: el.title || "",
-              href: el instanceof HTMLAnchorElement ? el.href : "",
-              tabIndex: el.getAttribute("tabindex"),
-              className: typeof el.className === "string" ? el.className.slice(0, 240) : "",
-              bounds: {
-                x: Math.round(rect.x), y: Math.round(rect.y),
-                width: Math.round(rect.width), height: Math.round(rect.height)
-              }
-            };
-          })
-          .filter((x) => x.text || x.href || x.ariaLabel || x.title)
-          .slice(0, 1500);
-
-        const headings = [...document.querySelectorAll("h1,h2,h3,[role='heading']")]
-          .filter(isVisible)
-          .map((el) => clean(el.innerText || el.getAttribute("aria-label")))
-          .filter(Boolean);
-
-        return {
-          schema: "loilonote-visible-page-v2",
-          capturedAt: new Date().toISOString(),
-          url: location.href,
-          title: document.title,
-          headings,
-          text: document.body?.innerText || "",
-          links,
-          interactive,
-          note: "可視DOM情報のみ。画面操作、Cookie・認証情報・非表示アプリ状態の取得、外部送信は行いません。"
-        };
-      }
-    });
-
-    const data = results?.[0]?.result;
-    if (!data) throw new Error("ページ内容を取得できませんでした。");
-
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: "application/json;charset=utf-8" });
-    objectUrl = URL.createObjectURL(blob);
-    const safeDate = new Date().toISOString().replace(/[:.]/g, "-");
-    const downloadId = await chrome.downloads.download({
-      url: objectUrl,
-      filename: "loilonote-capture-" + safeDate + ".json",
-      saveAs: true
-    });
-
-    status.textContent =
-      "取得処理を開始しました。\n" +
-      "本文 " + data.text.length.toLocaleString() + " 文字 / " +
-      "リンク " + data.links.length + " 件 / " +
-      "操作候補 " + data.interactive.length + " 件\n" +
-      "ダウンロードID: " + downloadId;
-    // ダウンロード完了イベントで解放する。popupが閉じても即時revokeしない。
-    const listener = (delta) => {
-      if (delta.id === downloadId && delta.state?.current === "complete") {
-        chrome.downloads.onChanged.removeListener(listener);
-        if (objectUrl) URL.revokeObjectURL(objectUrl);
-      } else if (delta.id === downloadId && delta.error) {
-        chrome.downloads.onChanged.removeListener(listener);
-        if (objectUrl) URL.revokeObjectURL(objectUrl);
-      }
-    };
-    chrome.downloads.onChanged.addListener(listener);
+    const id = await chrome.downloads.download({ url, filename, saveAs: true });
+    return id;
   } catch (error) {
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
-    status.textContent = "エラー: " + (error.message || error);
+    URL.revokeObjectURL(url);
+    throw error;
+  }
+};
+
+async function capturePage() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id || !tab.url?.startsWith("https://loilonote.app/")) {
+    throw new Error("ロイロノートの資料箱または資料ページを開いてください。");
+  }
+
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: () => {
+      const visible = (el) => {
+        const s = getComputedStyle(el);
+        const r = el.getBoundingClientRect();
+        return s.display !== "none" && s.visibility !== "hidden" &&
+          Number(s.opacity) !== 0 && r.width > 0 && r.height > 0;
+      };
+      const textOf = (el) => (el?.innerText || el?.getAttribute?.("aria-label") ||
+        el?.getAttribute?.("alt") || el?.getAttribute?.("title") || "")
+        .replace(/\s+/g, " ").trim();
+      const nodes = [...document.querySelectorAll("body *")].filter(visible);
+      const links = [...document.querySelectorAll("a[href]")].filter(visible).map(a => ({
+        text: textOf(a), href: a.href
+      })).filter(x => x.href.startsWith(location.origin));
+      const controls = nodes.filter(el =>
+        el.matches("a,button,[role],[tabindex],[onclick]") ||
+        getComputedStyle(el).cursor === "pointer"
+      ).map(el => {
+        const r = el.getBoundingClientRect();
+        return {
+          tag: el.tagName.toLowerCase(),
+          role: el.getAttribute("role") || "",
+          text: textOf(el),
+          ariaLabel: el.getAttribute("aria-label") || "",
+          title: el.getAttribute("title") || "",
+          href: el instanceof HTMLAnchorElement ? el.href : "",
+          className: typeof el.className === "string" ? el.className.slice(0,180) : "",
+          bounds: {x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)}
+        };
+      }).filter(x => x.text || x.href || x.ariaLabel || x.title).slice(0,2000);
+      const images = [...document.querySelectorAll("img")].filter(visible).map(img => ({
+        alt: img.alt || "", src: img.currentSrc || img.src || "",
+        width: img.naturalWidth || 0, height: img.naturalHeight || 0
+      }));
+      const tables = [...document.querySelectorAll("table")].filter(visible).map(t => textOf(t));
+      const canvas = [...document.querySelectorAll("canvas")].filter(visible).map(c => ({
+        width:c.width,height:c.height,
+        bounds:(()=>{const r=c.getBoundingClientRect();return {x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)}})()
+      }));
+      const text = document.body?.innerText || "";
+      const privateUse = (text.match(/[\uE000-\uF8FF]/g) || []).length;
+      const replacement = (text.match(/\uFFFD/g) || []).length;
+      const formulaHints = (text.match(/[=＋－×÷√∫∑≤≥≠]/g) || []).length;
+      return {
+        schema:"loilonote-local-archive-v3",
+        capturedAt:new Date().toISOString(),
+        url:location.href,
+        title:document.title,
+        headings:[...document.querySelectorAll("h1,h2,h3,[role='heading']")].filter(visible).map(textOf).filter(Boolean),
+        text, links, controls, images, tables, canvas,
+        quality:{
+          textLength:text.length,
+          privateUseGlyphCount:privateUse,
+          replacementCharacterCount:replacement,
+          formulaSymbolCount:formulaHints,
+          visibleImageCount:images.length,
+          canvasCount:canvas.length,
+          warnings:[
+            ...(privateUse?["私用領域文字が含まれます。数式・特殊文字の文字起こしは不完全の可能性があります。"]:[]),
+            ...(replacement?["置換文字が含まれます。原資料との照合が必要です。"]:[]),
+            ...(canvas.length?["Canvas表示があります。JSON本文だけでは図・数式を完全保存できない場合があります。"]:[]),
+            ...(!text.length?["本文テキストが取得できていません。"]:[])
+          ]
+        },
+        safety:"表示中の可視DOMのみ。Cookie・認証情報・非表示アプリ状態の取得、クリック、送信、編集、削除、外部通信は行いません。"
+      };
+    }
+  });
+  if (!result?.result) throw new Error("ページ内容を読み取れませんでした。");
+  return { tab, data: result.result };
+}
+
+captureButton.addEventListener("click", async () => {
+  captureButton.disabled = true;
+  exportButton.disabled = true;
+  status.textContent = "表示中ページを読み取り、ローカル保存しています…";
+  try {
+    const {tab,data} = await capturePage();
+    const key = data.url;
+    const old = await chrome.storage.local.get("captures");
+    const captures = old.captures || {};
+    const previous = captures[key];
+    const fingerprintInput = JSON.stringify({
+      title:data.title,text:data.text,links:data.links,images:data.images,controls:data.controls
+    });
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fingerprintInput));
+    const hash = [...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,"0")).join("");
+    const unchanged = previous?.hash === hash;
+    const revisions = previous?.revisions || [];
+    if (!unchanged) revisions.push({capturedAt:data.capturedAt,hash,data});
+    captures[key] = {url:key,title:data.title,hash,lastCapturedAt:data.capturedAt,revisions:revisions.slice(-20)};
+    await chrome.storage.local.set({captures});
+    const json = JSON.stringify(data,null,2);
+    const jsonId = await saveBlob(new Blob([json],{type:"application/json;charset=utf-8"}),
+      "LoiLoNote_"+stamp()+".json");
+    let screenshotMessage = "画面画像は未保存";
+    try {
+      const png = await chrome.tabs.captureVisibleTab(tab.windowId,{format:"png"});
+      const response = await fetch(png);
+      const blob = await response.blob();
+      const imageId = await saveBlob(blob,"LoiLoNote_Screen_"+stamp()+".png");
+      screenshotMessage = "画面画像ダウンロードID "+imageId;
+    } catch (e) {
+      screenshotMessage = "画面画像は取得できませんでした（"+(e.message||e)+"）";
+    }
+    status.textContent =
+      (unchanged ? "本文に変更なし（重複保存を抑制）" : "新規・更新データを保存")+
+      "\n"+data.title+
+      "\n本文 "+data.text.length+"文字 / リンク "+data.links.length+
+      "件 / 画像 "+data.images.length+"件 / Canvas "+data.canvas.length+"件"+
+      "\n履歴URL数 "+Object.keys(captures).length+
+      "\nJSONダウンロードID "+jsonId+
+      "\n"+screenshotMessage+
+      (data.quality.warnings.length ? "\n注意: "+data.quality.warnings.join(" / ") : "\n抽出上の警告なし（完全性の保証ではありません）");
+  } catch (error) {
+    status.textContent = "取得失敗: "+(error.message||error);
   } finally {
-    button.disabled = false;
+    captureButton.disabled = false;
+    exportButton.disabled = false;
+  }
+});
+
+exportButton.addEventListener("click", async () => {
+  exportButton.disabled = true;
+  try {
+    const {captures={}} = await chrome.storage.local.get("captures");
+    const archive = {
+      schema:"loilonote-local-archive-index-v1",
+      exportedAt:new Date().toISOString(),
+      count:Object.keys(captures).length,
+      captures
+    };
+    const id = await saveBlob(new Blob([JSON.stringify(archive,null,2)],
+      {type:"application/json;charset=utf-8"}),"LoiLoNote_Archive_"+stamp()+".json");
+    status.textContent = "ローカル保存済み "+archive.count+" URL分をエクスポートしました。ダウンロードID "+id;
+  } catch (error) {
+    status.textContent = "エクスポート失敗: "+(error.message||error);
+  } finally {
+    exportButton.disabled = false;
   }
 });
