@@ -16,14 +16,17 @@
   </style>
 </head>
 <body>
-  <h1>LoiLoNote Local Reader v0.8.2</h1>
+  <h1>LoiLoNote Local Reader v0.8.4</h1>
   <p>表示中ページの本文・画面画像・画面構造診断・画面種別（授業一覧／資料箱／ノート／共有ノート／提出箱／タイムライン）をローカル保存します。URLは同一オリジンのパスだけ保存し、クエリ・フラグメントと外部URLは保存しません。</p>
-  <button id="scanFolders">フォルダ構成を自動巡回</button>
+  <label for="scopeClassName">巡回する通常授業名（画面表示と完全一致）</label>
+  <input id="scopeClassName" type="text" autocomplete="off" placeholder="例：数学Ⅰ" style="box-sizing:border-box;width:100%;padding:9px;border:1px solid #9aa7bb;border-radius:7px;margin:4px 0">
+  <label style="display:flex;gap:8px;align-items:flex-start;margin:8px 0"><input id="scopeNormalConfirmed" type="checkbox" style="margin-top:4px">この授業は「自主学習と並行した授業」ではなく、通常授業であることを確認した</label>
+  <button id="scanFolders">確認済み通常授業のフォルダ構成を巡回</button>
   <button id="capture">このページを取得・保存</button>
   <button id="export" class="secondary">保存済み全ページの索引を出力</button>
   <button id="openArchive" class="secondary">資料検索画面を開く</button>
   <div id="status" role="status">対象ページを開いてから取得してください。</div>
-  <small>フォルダ巡回はユーザー開始時のみ実行し、検索欄より上にある階層表示アイコンを画面位置で除外し、検索欄が一意でない場合・未識別アイコンがある場合・クリック直前に一覧が変化した場合は停止します。教材本文の一括取得は未対応です。ログイン操作・Cookie取得・外部送信はしません。画面画像は表示範囲のみです。数式等は原資料との照合が必要です。</small>
+  <small>フォルダ巡回は授業名の完全一致と通常授業確認が必要です。自主学習と並行した授業は対象外です。検索欄が一意でない場合・未識別アイコンがある場合・クリック直前に一覧が変化した場合は停止します。教材本文の一括取得は未対応です。ログイン操作・Cookie取得・外部送信はしません。画面画像は表示範囲のみです。数式等は原資料との照合が必要です。</small>
   <script src="popup.js"></script>
 </body>
 </html>
