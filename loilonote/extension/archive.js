@@ -18,7 +18,7 @@ function addRecord(raw){
     }
     return;
   }
-  if((raw?.schema==="loilonote-local-archive-v3"||raw?.schema==="loilonote-local-archive-v4"||raw?.schema==="loilonote-local-archive-v5")&&raw.url){
+  if((raw?.schema==="loilonote-local-archive-v3"||raw?.schema==="loilonote-local-archive-v4"||raw?.schema==="loilonote-local-archive-v5"||raw?.schema==="loilonote-local-archive-v6")&&raw.url){
     records.set(raw.url,{data:raw,hash:"",revisions:[]});return;
   }
   if(raw?.data?.url){records.set(raw.data.url,{data:raw.data,hash:raw.hash||"",revisions:raw.revisions||[]});return;}
