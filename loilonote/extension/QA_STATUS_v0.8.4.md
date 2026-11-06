@@ -9,6 +9,7 @@ Branch: `feature/loilonote-extractor`
 - Folder traversal requires the entered class name to match one complete visible text line on the current material-box page.
 - Traversal is blocked if the exact exclusion phrase is visible on the current page.
 - The resulting folder-map JSON records the entered class name, user-confirmation flag, verification method, and limitation.
+- Course-list diagnostics now retain bounded visible ancestor context per candidate and separately report whether a standalone 「自主学習」 entry is visible.
 - Updated popup title, manifest version, README, and INSTALL to v0.8.4.
 
 ## Static checks
