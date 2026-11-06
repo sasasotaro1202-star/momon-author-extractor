@@ -47,11 +47,21 @@ async function capturePage() {
         standardNoteList:"ノート", sharedNoteList:"共有ノート",
         submitBox:"提出箱", timeline:"タイムライン"
       };
-      const currentView = viewMap[tabParam] || (location.pathname.includes("/material-box/") ? "資料箱" : "未分類");
+      const routeView = viewMap[tabParam] || "";
       const bodyLines = (document.body?.innerText || "").split(/\n+/).map(x=>x.trim()).filter(Boolean);
-      const courseContext = bodyLines.find(x=>/\/\s*[^/]+$/.test(x) && x.length<120) || "";
       const knownSections = ["ノート","共有ノート","提出箱","タイムライン"];
       const visibleSections = knownSections.filter(label => bodyLines.includes(label));
+      const activeTabLabels = [...document.querySelectorAll('[role="tab"][aria-selected="true"],[role="tab"][aria-current="page"],[aria-selected="true"],[aria-current="page"]')]
+        .filter(visible).map(el=>textOf(el)).filter(label=>knownSections.includes(label));
+      const uniqueActiveTabs = [...new Set(activeTabLabels)];
+      const titleSignals = knownSections.filter(label => (document.title+" "+(document.querySelector("h1,h2,[role='heading']")?.innerText||"")).includes(label));
+      const activeView = uniqueActiveTabs.length===1 ? uniqueActiveTabs[0] : "";
+      const titleView = titleSignals.length===1 ? titleSignals[0] : "";
+      const signals = [...new Set([activeView,titleView,routeView].filter(Boolean))];
+      const classificationConflict = signals.length>1;
+      const currentView = location.pathname.includes("/material-box/") ? "資料箱" :
+        classificationConflict ? "判定保留" : (activeView || titleView || routeView || "未分類");
+      const courseContext = bodyLines.find(x=>/\/\s*[^/]+$/.test(x) && x.length<120) || "";
       const nodes = [...document.querySelectorAll("body *")].filter(visible);
       const links = [...document.querySelectorAll("a[href]")].filter(visible).map(a => ({
         text: textOf(a), href: safeLocalUrl(a.href)
@@ -92,8 +102,9 @@ async function capturePage() {
         capturedAt:new Date().toISOString(),
         url:safePageUrl,
         urlSanitization:"same-origin origin+pathname only; query and fragment removed",
-        view:{category:currentView,tabParameterRecognized:!!viewMap[tabParam] || currentView==="資料箱",
-          courseContext,visibleSections,observedTabParameter:!!tabParam},
+        view:{category:currentView,routeHint:routeView,activeTab:activeView,titleHint:titleView,
+          classificationConflict,activeTabCandidates:uniqueActiveTabs,courseContext,visibleSections,
+          observedTabParameter:!!tabParam,classificationMethod:"visible active-tab/title signals reconciled with route hint; conflicts fail closed"},
         title:document.title,
         headings:[...document.querySelectorAll("h1,h2,h3,[role='heading']")].filter(visible).map(textOf).filter(Boolean),
         text, links, controls, images, tables, canvas,
