@@ -231,12 +231,12 @@ async function scanFolderTree(confirmedClassName) {
     throw new Error("LoiLoNoteの資料箱ページを開いてください。");
   }
   const [result] = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    args: [confirmedClassName],
-    func: async (confirmedClassName) => {
+    target: { tabId: tab.id, frameIds: [0] },
+    args: [confirmedClassName, confirmedNormalClasses],
+    func: async (confirmedClassName, allowedClassNames) => {
       const visiblePageText = document.body?.innerText || "";
       const visiblePageLines = visiblePageText.split(/\n+/).map(line=>line.replace(/\s+/g," ").trim()).filter(Boolean);
-      if (!confirmedNormalClasses.includes(confirmedClassName)) return {blocked:true,reason:"今回確認済みの通常授業18件に含まれないため巡回を停止しました。"};
+      if (!Array.isArray(allowedClassNames) || !allowedClassNames.includes(confirmedClassName)) return {blocked:true,reason:"今回確認済みの通常授業18件に含まれないため巡回を停止しました。"};
       if (!visiblePageLines.includes(confirmedClassName)) return {blocked:true,reason:"入力した授業名と完全一致する表示行が現在の画面にありません。巡回を停止しました。"};
       if (visiblePageText.includes("自主学習と並行した授業")) return {blocked:true,reason:"対象外：自主学習と並行した授業の明示表示を検出"};
       
@@ -406,14 +406,11 @@ scanButton?.addEventListener("click", async () => {
   const className=document.getElementById("scopeClassName")?.value?.trim()||"";
   const confirmed=confirmedNormalClasses.includes(className);
   if(!className || !confirmed){
-    status.textContent="巡回停止：通常授業名を入力し、「自主学習と並行した授業」ではないことを確認してください。";
+    status.textContent="巡回停止：確認済み通常授業18件から対象を選択してください。";
     return;
   }
-  if(false){
-    status.textContent="巡回をキャンセルしました。";return;
-  }
   scanButton.disabled=true;captureButton.disabled=true;exportButton.disabled=true;
-  status.textContent="授業名の画面一致と除外表示を検査しています…";
+  status.textContent="許可リスト・画面上の授業名一致・除外表示を検査しています…";
   try{
     const {data}=await scanFolderTree(className);
     const id=await saveBlob(new Blob([JSON.stringify(data,null,2)],{type:"application/json;charset=utf-8"}),
