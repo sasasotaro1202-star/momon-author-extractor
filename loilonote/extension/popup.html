@@ -16,11 +16,30 @@
   </style>
 </head>
 <body>
-  <h1>LoiLoNote Local Reader v0.8.8</h1>
+  <h1>LoiLoNote Local Reader v0.8.9</h1>
   <p>表示中ページの本文・画面画像・画面構造診断・画面種別（授業一覧／資料箱／ノート／共有ノート／提出箱／タイムライン）をローカル保存します。URLは同一オリジンのパスだけ保存し、クエリ・フラグメントと外部URLは保存しません。</p>
-  <label for="scopeClassName">巡回する通常授業名（画面表示と完全一致）</label>
-  <input id="scopeClassName" type="text" autocomplete="off" placeholder="例：数学Ⅰ" style="box-sizing:border-box;width:100%;padding:9px;border:1px solid #9aa7bb;border-radius:7px;margin:4px 0">
-  <label style="display:flex;gap:8px;align-items:flex-start;margin:8px 0"><input id="scopeNormalConfirmed" type="checkbox" style="margin-top:4px">この授業は「自主学習と並行した授業」ではなく、通常授業であることを確認した</label>
+  <label for="scopeClassName">巡回する通常授業（確認済み18件）</label>
+  <select id="scopeClassName" style="box-sizing:border-box;width:100%;padding:9px;border:1px solid #9aa7bb;border-radius:7px;margin:4px 0">
+    <option value="LHR">LHR</option>
+    <option value="英語コミュニケーションI">英語コミュニケーションI</option>
+    <option value="化学基礎">化学基礎</option>
+    <option value="家庭基礎">家庭基礎</option>
+    <option value="現代の国語">現代の国語</option>
+    <option value="言語文化">言語文化</option>
+    <option value="公共">公共</option>
+    <option value="情報I">情報I</option>
+    <option value="数学A">数学A</option>
+    <option value="数学Ⅰ">数学Ⅰ</option>
+    <option value="生物基礎">生物基礎</option>
+    <option value="地理総合">地理総合</option>
+    <option value="美術">美術</option>
+    <option value="物理基礎">物理基礎</option>
+    <option value="保健">保健</option>
+    <option value="保健体育">保健体育</option>
+    <option value="歴史総合">歴史総合</option>
+    <option value="論理・表現I">論理・表現I</option>
+  </select>
+  <small>18件すべて通常授業として確認済み。自主学習と並行した授業の明示表示があれば停止します。</small>
   <button id="scanFolders">確認済み通常授業のフォルダ構成を巡回</button>
   <button id="capture">このページを取得・保存</button>
   <button id="export" class="secondary">保存済み全ページの索引を出力</button>
