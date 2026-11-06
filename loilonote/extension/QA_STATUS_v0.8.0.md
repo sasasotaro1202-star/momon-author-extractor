@@ -24,6 +24,7 @@ Branch: `feature/loilonote-extractor`
 
 ## Not verified / not implemented
 - No execution of the extension in the user's Chrome after this update.
+- Browser context showed an inconsistency between selected-tab metadata (`standardNoteList`) and extracted page URL (`tab=timeline`) while the page title/text indicated the note list. Therefore URL-parameter classification is provisional and must be reconciled against the actual DOM in Chrome before any automatic tab navigation.
 - No runtime verification that all four tab parameter values match every LoiLoNote account/course.
 - No automated traversal across all courses.
 - No automated switching/capture of all four course sections.
