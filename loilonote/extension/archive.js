@@ -6,7 +6,6 @@ const detailEl=document.getElementById("detail");
 const detailTitle=document.getElementById("detailTitle");
 const records=new Map();
 let selected="";
-const esc=(s)=>String(s??"");
 function addRecord(raw){
   if(raw?.schema==="loilonote-local-archive-index-v1"&&raw.captures){
     for(const [url,entry] of Object.entries(raw.captures)){
@@ -19,7 +18,7 @@ function addRecord(raw){
     }
     return;
   }
-  if(raw?.schema==="loilonote-local-archive-v3"&&raw.url){
+  if((raw?.schema==="loilonote-local-archive-v3"||raw?.schema==="loilonote-local-archive-v4")&&raw.url){
     records.set(raw.url,{data:raw,hash:"",revisions:[]});return;
   }
   if(raw?.data?.url){records.set(raw.data.url,{data:raw.data,hash:raw.hash||"",revisions:raw.revisions||[]});return;}
@@ -48,7 +47,7 @@ function show(url){
   selected=url;const r=records.get(url);if(!r)return;const d=r.data;
   detailTitle.textContent=d.title||"無題";
   detailEl.replaceChildren();
-  const meta=document.createElement("p");meta.textContent="取得日時: "+(d.capturedAt||"不明")+"\\nURL: "+url;
+  const meta=document.createElement("p");meta.textContent="取得日時: "+(d.capturedAt||"不明")+"\nURL: "+url;
   detailEl.append(meta);
   const warnings=d.quality?.warnings||[];
   if(warnings.length){const w=document.createElement("div");w.className="warning";w.textContent="取得品質の注意: "+warnings.join(" / ");detailEl.append(w);}
@@ -61,7 +60,7 @@ fileInput.addEventListener("change",async()=>{
   let ok=0;const errors=[];
   for(const file of fileInput.files||[]){try{addRecord(JSON.parse(await file.text()));ok++;}catch(e){errors.push(file.name+": "+e.message);}}
   render();fileInput.value="";
-  if(errors.length)alert("読み込み "+ok+"件\\n"+errors.join("\\n"));
+  if(errors.length)alert("読み込み "+ok+"件\n"+errors.join("\n"));
 });
 searchInput.addEventListener("input",render);
 document.getElementById("export").addEventListener("click",()=>{
