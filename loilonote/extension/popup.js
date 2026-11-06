@@ -113,7 +113,7 @@ captureButton.addEventListener("click", async () => {
     const unchanged = previous?.hash === hash;
     const revisions = previous?.revisions || [];
     if (!unchanged) revisions.push({capturedAt:data.capturedAt,hash,data});
-    captures[key] = {url:key,title:data.title,hash,lastCapturedAt:data.capturedAt,revisions:revisions.slice(-20)};
+    captures[key] = {url:key,title:data.title,hash,lastCapturedAt:data.capturedAt,revisions:revisions.slice(-5)};
     await chrome.storage.local.set({captures});
     const json = JSON.stringify(data,null,2);
     const jsonId = await saveBlob(new Blob([json],{type:"application/json;charset=utf-8"}),
