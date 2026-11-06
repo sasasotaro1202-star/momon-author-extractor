@@ -118,7 +118,9 @@ captureButton.addEventListener("click", async () => {
     const captures = old.captures || {};
     const previous = captures[key];
     const fingerprintInput = JSON.stringify({
-      title:data.title,text:data.text,links:data.links,images:data.images,controls:data.controls
+      title:data.title,text:data.text,headings:data.headings,links:data.links,
+      images:data.images,tables:data.tables,canvas:data.canvas,controls:data.controls,
+      quality:data.quality
     });
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(fingerprintInput));
     const hash = [...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,"0")).join("");
@@ -126,7 +128,14 @@ captureButton.addEventListener("click", async () => {
     const revisions = previous?.revisions || [];
     if (!unchanged) revisions.push({capturedAt:data.capturedAt,hash,data});
     captures[key] = {url:key,title:data.title,hash,lastCapturedAt:data.capturedAt,revisions:revisions.slice(-5)};
-    await chrome.storage.local.set({captures});
+    let localSaved = true;
+    let localSaveError = "";
+    try {
+      await chrome.storage.local.set({captures});
+    } catch (storageError) {
+      localSaved = false;
+      localSaveError = storageError?.message || String(storageError);
+    }
     const json = JSON.stringify(data,null,2);
     const jsonId = await saveBlob(new Blob([json],{type:"application/json;charset=utf-8"}),
       "LoiLoNote_"+stamp()+".json");
@@ -141,7 +150,8 @@ captureButton.addEventListener("click", async () => {
       screenshotMessage = "画面画像は取得できませんでした（"+(e.message||e)+"）";
     }
     status.textContent =
-      (unchanged ? "本文に変更なし（重複保存を抑制）" : "新規・更新データを保存")+
+      (unchanged ? "本文・構造に変更なし（履歴追加を抑制）" : "新規・更新データをJSON出力")+ 
+      (localSaved ? "\nChromeローカル履歴: 保存済み" : "\n【重大】Chromeローカル履歴: 保存失敗（"+localSaveError+"）。JSONファイルを別途保管してください。")+
       "\n"+data.title+
       "\n本文 "+data.text.length+"文字 / リンク "+data.links.length+
       "件 / 画像 "+data.images.length+"件 / Canvas "+data.canvas.length+"件"+
