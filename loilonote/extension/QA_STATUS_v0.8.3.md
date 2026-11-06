@@ -17,6 +17,10 @@ Branch: `feature/loilonote-extractor`
 - Added fail-closed block for the exact visible exclusion phrase in page capture and folder scan.
 - Manifest version updated to 0.8.3.
 
+## Current read-only browser observation
+- The visible course-home text contains ordinary course names and a separate 「自主学習」 entry, but does not show the exact phrase 「自主学習と並行した授業」.
+- This text-only observation does not establish which lesson, if any, is conducted concurrently with self-study. No course was opened or clicked. The DOM relationship and reliable exclusion marker remain unverified.
+
 ## Important limits / not verified
 - The actual UI wording and DOM placement of the label 「自主学習と並行した授業」 have not been confirmed in a live Chrome capture.
 - Exact-phrase detection can miss alternate wording, icons, badges outside the inspected ancestor chain, or labels rendered in another screen.
