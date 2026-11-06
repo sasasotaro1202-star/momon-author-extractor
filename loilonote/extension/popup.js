@@ -106,6 +106,123 @@ async function capturePage() {
   return { tab, data: result.result };
 }
 
+
+async function scanFolderTree() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id || !tab.url?.startsWith("https://loilonote.app/") || !tab.url.includes("/material-box/")) {
+    throw new Error("LoiLoNoteの資料箱ページを開いてください。");
+  }
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: async () => {
+      const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const visible = el => {
+        const s=getComputedStyle(el), r=el.getBoundingClientRect();
+        return s.display!=="none" && s.visibility!=="hidden" && Number(s.opacity)!==0 && r.width>0 && r.height>0;
+      };
+      const clean = s => (s||"").replace(/\\s+/g," ").trim();
+      const pageKey = () => location.origin+location.pathname;
+      const folderRows = () => {
+        const imgs=[...document.querySelectorAll('img[src*="MaterialFolder"]')].filter(visible);
+        const out=[], seen=new Set();
+        for(const img of imgs){
+          let node=img, chosen=null;
+          for(let depth=0;depth<9 && node;depth++,node=node.parentElement){
+            const style=getComputedStyle(node);
+            const clickable=node.matches("a,button,[role='button'],[onclick]") || style.cursor==="pointer";
+            if(clickable && node.querySelectorAll('img[src*="MaterialFolder"]').length===1){
+              const label=clean(node.innerText||node.getAttribute("aria-label")||"");
+              if(label.length>=2 && label.length<=180){chosen=node;break;}
+            }
+          }
+          if(!chosen || seen.has(chosen)) continue;
+          seen.add(chosen);
+          out.push({node:chosen,label:clean(chosen.innerText||chosen.getAttribute("aria-label")||"").slice(0,180)});
+        }
+        return out;
+      };
+      const waitForPath = async (oldPath, timeout=9000) => {
+        const end=Date.now()+timeout;
+        while(Date.now()<end){if(pageKey()!==oldPath){await sleep(500);return true;}await sleep(100);}
+        return false;
+      };
+      const visited=new Set(), pages=[], warnings=[];
+      const maxPages=150, maxDepth=16;
+      let stopped=false;
+      async function visit(depth, ancestry){
+        const key=pageKey();
+        if(visited.has(key)) return;
+        if(visited.size>=maxPages){warnings.push("安全上限150ページに到達しました。");stopped=true;return;}
+        if(depth>maxDepth){warnings.push("深さ上限16に到達しました。");return;}
+        visited.add(key);
+        await sleep(450);
+        const rows=folderRows();
+        const text=document.body?.innerText||"";
+        pages.push({
+          url:key,title:document.title,text,
+          depth,ancestry,
+          folders:rows.map((r,i)=>({label:r.label,index:i})),
+          capturedAt:new Date().toISOString()
+        });
+        for(let i=0;i<rows.length;i++){
+          if(stopped) return;
+          const current=folderRows();
+          const target=current[i];
+          if(!target) continue;
+          const parent=pageKey(), label=target.label;
+          target.node.click();
+          if(!await waitForPath(parent)){
+            warnings.push("フォルダ「"+label+"」の画面遷移をURLで確認できず、安全のため巡回を停止しました。");
+            stopped=true;return;
+          }
+          await visit(depth+1,[...ancestry,label]);
+          if(stopped) return;
+          history.back();
+          if(!await waitForPath(pageKey()===parent ? "__never__" : pageKey(), 1)){
+            // The path at this point is the child path; wait explicitly for the parent.
+          }
+          const backEnd=Date.now()+9000;
+          while(Date.now()<backEnd && pageKey()!==parent) await sleep(100);
+          if(pageKey()!==parent){
+            warnings.push("親フォルダへ安全に戻れませんでした。「"+label+"」以降を停止しました。");
+            stopped=true;return;
+          }
+          await sleep(350);
+        }
+      }
+      await visit(0,[]);
+      return {
+        schema:"loilonote-folder-map-v1",
+        startedAt:pages[0]?.capturedAt||new Date().toISOString(),
+        finishedAt:new Date().toISOString(),
+        startUrl:pages[0]?.url||pageKey(),
+        pageCount:pages.length,
+        complete:!stopped && warnings.length===0,
+        pages,warnings,
+        limitations:["フォルダ一覧ページの本文・フォルダ名のみ取得します。個々の教材本文・画像・添付ファイルは取得しません。","URLが変化しないフォルダ遷移は安全のため巡回しません。","ログイン切れ・予期しない画面・上限到達時は未完了として停止します。"]
+      };
+    }
+  });
+  if(!result?.result) throw new Error("フォルダ巡回結果を取得できませんでした。");
+  return {tab,data:result.result};
+}
+
+const scanButton = document.getElementById("scanFolders");
+scanButton?.addEventListener("click", async () => {
+  scanButton.disabled=true;captureButton.disabled=true;exportButton.disabled=true;
+  status.textContent="フォルダ構成を巡回しています。最大150ページ・深さ16、フォルダ以外はクリックしません…";
+  try{
+    const {data}=await scanFolderTree();
+    const id=await saveBlob(new Blob([JSON.stringify(data,null,2)],{type:"application/json;charset=utf-8"}),
+      "LoiLoNote_FolderMap_"+stamp()+".json");
+    status.textContent=(data.complete?"フォルダ巡回完了":"【未完了】フォルダ巡回を停止")+
+      "\\n巡回ページ "+data.pageCount+"件 / ダウンロードID "+id+
+      (data.warnings.length?"\\n警告: "+data.warnings.join(" / "):"")+
+      "\\n注意: 教材本文・画像・添付ファイルの取得はまだ含みません。";
+  }catch(error){status.textContent="フォルダ巡回失敗: "+(error.message||error);}
+  finally{scanButton.disabled=false;captureButton.disabled=false;exportButton.disabled=false;}
+});
+
 captureButton.addEventListener("click", async () => {
   captureButton.disabled = true;
   exportButton.disabled = true;
