@@ -33,10 +33,18 @@ async function capturePage() {
       const textOf = (el) => (el?.innerText || el?.getAttribute?.("aria-label") ||
         el?.getAttribute?.("alt") || el?.getAttribute?.("title") || "")
         .replace(/\s+/g, " ").trim();
+      const safeLocalUrl = (raw) => {
+        try {
+          const u = new URL(raw, location.href);
+          if (u.origin !== location.origin || !["https:","http:"].includes(u.protocol)) return "";
+          return u.origin + u.pathname;
+        } catch { return ""; }
+      };
+      const safePageUrl = location.origin + location.pathname;
       const nodes = [...document.querySelectorAll("body *")].filter(visible);
       const links = [...document.querySelectorAll("a[href]")].filter(visible).map(a => ({
-        text: textOf(a), href: (() => { const u = new URL(a.href); return u.origin + u.pathname; })()
-      })).filter(x => x.href.startsWith(location.origin));
+        text: textOf(a), href: safeLocalUrl(a.href)
+      })).filter(x => x.href);
       const controls = nodes.filter(el =>
         el.matches("a,button,[role],[tabindex],[onclick]") ||
         getComputedStyle(el).cursor === "pointer"
@@ -48,7 +56,7 @@ async function capturePage() {
           text: textOf(el),
           ariaLabel: el.getAttribute("aria-label") || "",
           title: el.getAttribute("title") || "",
-          href: el instanceof HTMLAnchorElement ? el.href : "",
+          href: el instanceof HTMLAnchorElement ? safeLocalUrl(el.href) : "",
           className: typeof el.className === "string" ? el.className.slice(0,180) : "",
           dataAttributes: Object.fromEntries([...el.attributes].filter(a => a.name.startsWith("data-")).slice(0,20).map(a => [a.name,a.value.slice(0,160)])),
           outerHTML: (() => { const clone = el.cloneNode(false); for (const a of [...clone.attributes]) if (["href","src","srcset"].includes(a.name.toLowerCase())) clone.removeAttribute(a.name); return clone.outerHTML.slice(0,1200); })(),
@@ -56,7 +64,7 @@ async function capturePage() {
         };
       }).filter(x => x.text || x.href || x.ariaLabel || x.title).slice(0,2000);
       const images = [...document.querySelectorAll("img")].filter(visible).map(img => ({
-        alt: img.alt || "", src: (() => { try { const u = new URL(img.currentSrc || img.src || "", location.href); return u.origin + u.pathname; } catch { return ""; } })(),
+        alt: img.alt || "", src: safeLocalUrl(img.currentSrc || img.src || ""),
         width: img.naturalWidth || 0, height: img.naturalHeight || 0
       }));
       const tables = [...document.querySelectorAll("table")].filter(visible).map(t => textOf(t));
@@ -69,9 +77,10 @@ async function capturePage() {
       const replacement = (text.match(/\uFFFD/g) || []).length;
       const formulaHints = (text.match(/[=＋－×÷√∫∑≤≥≠]/g) || []).length;
       return {
-        schema:"loilonote-local-archive-v4",
+        schema:"loilonote-local-archive-v5",
         capturedAt:new Date().toISOString(),
-        url:location.href,
+        url:safePageUrl,
+        urlSanitization:"same-origin origin+pathname only; query and fragment removed",
         title:document.title,
         headings:[...document.querySelectorAll("h1,h2,h3,[role='heading']")].filter(visible).map(textOf).filter(Boolean),
         text, links, controls, images, tables, canvas,
@@ -89,7 +98,7 @@ async function capturePage() {
             ...(!text.length?["本文テキストが取得できていません。"]:[])
           ]
         },
-        safety:"表示中の可視DOMのみ。URLのクエリ・フラグメントは保存しません。Cookie・認証情報・非表示アプリ状態の取得、クリック、送信、編集、削除、外部通信は行いません。"
+        safety:"表示中の可視DOMのみ。同一オリジンのURLはorigin+pathnameのみ保存し、クエリ・フラグメントと外部URLは保存しません。Cookie・認証情報・非表示アプリ状態の取得、クリック、送信、編集、削除、外部通信は行いません。"
       };
     }
   });
@@ -104,6 +113,7 @@ captureButton.addEventListener("click", async () => {
   try {
     const {tab,data} = await capturePage();
     const key = data.url;
+    if (!key || !key.startsWith("https://loilonote.app/")) throw new Error("安全な資料URLを確定できませんでした。");
     const old = await chrome.storage.local.get("captures");
     const captures = old.captures || {};
     const previous = captures[key];
