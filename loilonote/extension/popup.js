@@ -104,7 +104,7 @@ async function capturePage() {
           !["授業一覧","資料箱","提出","送る","閉講した授業","自主学習","掲示板","クラス参加コードを入力"].includes(label);
       }).map(control => {
         const excluded = (control.contextText||"").includes(parallelSelfStudyMarker);
-        return {label:clean(control.text || control.ariaLabel || control.title),tag:control.tag,role:control.role,href:control.href,className:control.className,bounds:control.bounds,contextText:control.contextText||"",scopeStatus:excluded?"対象外":"判定保留",scopeReason:excluded?"自主学習と並行した授業の明示表示を検出":"通常授業であることを可視情報だけで確認できないため巡回禁止"};
+        return {label:normalize(control.text || control.ariaLabel || control.title),tag:control.tag,role:control.role,href:control.href,className:control.className,bounds:control.bounds,contextText:control.contextText||"",scopeStatus:excluded?"対象外":"判定保留",scopeReason:excluded?"自主学習と並行した授業の明示表示を検出":"通常授業であることを可視情報だけで確認できないため巡回禁止"};
       }) : [];
       const images = [...document.querySelectorAll("img")].filter(visible).map(img => ({
         alt: img.alt || "", src: safeLocalUrl(img.currentSrc || img.src || ""),
