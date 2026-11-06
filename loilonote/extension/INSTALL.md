@@ -1,4 +1,4 @@
-# LoiLoNote Local Reader v0.3.0
+# LoiLoNote Local Reader v0.4.0
 
 ## 目的
 LoiLoNoteでユーザーが表示しているページを、可視DOM情報と画面画像としてローカル保存するChrome拡張機能です。
