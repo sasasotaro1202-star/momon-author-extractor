@@ -152,15 +152,20 @@ async function capturePage() {
 }
 
 
-async function scanFolderTree() {
+async function scanFolderTree(confirmedClassName) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id || !tab.url?.startsWith("https://loilonote.app/") || !tab.url.includes("/material-box/")) {
     throw new Error("LoiLoNoteの資料箱ページを開いてください。");
   }
   const [result] = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    func: async () => {
-      if ((document.body?.innerText || "").includes("自主学習と並行した授業")) return {blocked:true,reason:"対象外：自主学習と並行した授業の明示表示を検出"};
+    args: [confirmedClassName],
+    func: async (confirmedClassName) => {
+      const visiblePageText = (document.body?.innerText || "").replace(/\\s+/g," ").trim();
+      if (!confirmedClassName || confirmedClassName.length > 100) return {blocked:true,reason:"授業名が未入力または長すぎます。"};
+      if (!visiblePageText.includes(confirmedClassName)) return {blocked:true,reason:"入力した授業名が現在の画面に完全一致で見つかりません。巡回を停止しました。"};
+      if (visiblePageText.includes("自主学習と並行した授業")) return {blocked:true,reason:"対象外：自主学習と並行した授業の明示表示を検出"};
+      
       const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
       const visible = el => {
         const s=getComputedStyle(el), r=el.getBoundingClientRect();
@@ -307,6 +312,7 @@ async function scanFolderTree() {
       await visit(0,[]);
       return {
         schema:"loilonote-folder-map-v1",
+        scopeVerification:{className:confirmedClassName,method:"user-confirmed normal class; exact class name matched visible page text",userConfirmedNormalClass:true,excludedParallelSelfStudyPhraseAbsent:true,warning:"画面上の文字列一致とユーザー確認によるゲートであり、LoiLoNote側の授業属性を機械的に証明するものではありません。"},
         startedAt:pages[0]?.capturedAt||new Date().toISOString(),
         finishedAt:new Date().toISOString(),
         startUrl:pages[0]?.url||pageKey(),
@@ -319,15 +325,25 @@ async function scanFolderTree() {
   });
   if(!result?.result) throw new Error("フォルダ巡回結果を取得できませんでした。");
   if(result.result.blocked) throw new Error(result.result.reason);
+  if(!result.result.scopeVerification?.userConfirmedNormalClass || result.result.scopeVerification.className!==confirmedClassName) throw new Error("通常授業の対象確認情報が不足しているため、結果を採用しません。");
   return {tab,data:result.result};
 }
 
 const scanButton = document.getElementById("scanFolders");
 scanButton?.addEventListener("click", async () => {
+  const className=document.getElementById("scopeClassName")?.value?.trim()||"";
+  const confirmed=document.getElementById("scopeNormalConfirmed")?.checked===true;
+  if(!className || !confirmed){
+    status.textContent="巡回停止：通常授業名を入力し、「自主学習と並行した授業」ではないことを確認してください。";
+    return;
+  }
+  if(!confirm("「"+className+"」は自主学習と並行した授業ではない通常授業ですか？\n確認できた場合だけ巡回します。")){
+    status.textContent="巡回をキャンセルしました。";return;
+  }
   scanButton.disabled=true;captureButton.disabled=true;exportButton.disabled=true;
-  status.textContent="フォルダ構成を巡回しています。最大150ページ・深さ16、フォルダ以外はクリックしません…";
+  status.textContent="授業名の画面一致と除外表示を検査しています…";
   try{
-    const {data}=await scanFolderTree();
+    const {data}=await scanFolderTree(className);
     const id=await saveBlob(new Blob([JSON.stringify(data,null,2)],{type:"application/json;charset=utf-8"}),
       "LoiLoNote_FolderMap_"+stamp()+".json");
     status.textContent=(data.complete?"フォルダ巡回完了":"【未完了】フォルダ巡回を停止")+
