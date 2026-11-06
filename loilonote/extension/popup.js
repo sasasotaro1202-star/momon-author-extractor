@@ -151,6 +151,10 @@ async function scanFolderTree() {
       let stopped=false;
       async function visit(depth, ancestry){
         const key=pageKey();
+        if(!key.includes("/material-box/")){
+          warnings.push("資料箱以外の画面へ遷移したため、安全のため停止しました。");
+          stopped=true;return;
+        }
         if(visited.has(key)) return;
         if(visited.size>=maxPages){warnings.push("安全上限150ページに到達しました。");stopped=true;return;}
         if(depth>maxDepth){warnings.push("深さ上限16に到達しました。");return;}
