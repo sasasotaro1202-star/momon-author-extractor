@@ -21,9 +21,12 @@ async function capturePage() {
     throw new Error("ロイロノートの資料箱または資料ページを開いてください。");
   }
 
-  const [result] = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: () => {
+  let injectionResults;
+  try {
+    injectionResults = await chrome.scripting.executeScript({
+      target: { tabId: tab.id, frameIds: [0] },
+      world: "ISOLATED",
+      func: () => {
       const visible = (el) => {
         const s = getComputedStyle(el);
         const r = el.getBoundingClientRect();
@@ -144,9 +147,36 @@ async function capturePage() {
         },
         safety:"表示中の可視DOMのみ。同一オリジンのURLはorigin+pathnameのみ保存し、クエリ・フラグメントと外部URLは保存しません。Cookie・認証情報・非表示アプリ状態の取得、クリック、送信、編集、削除、外部通信は行いません。"
       };
+      }
+    });
+  } catch (error) {
+    throw new Error("ページ読み取り処理の実行に失敗しました（tabId="+tab.id+", URL="+new URL(tab.url).origin+new URL(tab.url).pathname+"）。Chromeの権限・拡張機能の再読み込みを確認してください。詳細: "+(error?.message||String(error)));
+  }
+  if (!Array.isArray(injectionResults) || injectionResults.length === 0) {
+    throw new Error("ページ読み取り処理の結果が0件でした（tabId="+tab.id+"）。拡張機能を再読み込みして再試行してください。");
+  }
+  const result = injectionResults.find(item => item.frameId === 0) || injectionResults[0];
+  if (!result || !Object.prototype.hasOwnProperty.call(result, "result") || result.result == null) {
+    let probe = "診断不能";
+    try {
+      const probeResults = await chrome.scripting.executeScript({
+        target: { tabId: tab.id, frameIds: [0] },
+        world: "ISOLATED",
+        func: () => ({
+          readyState: document.readyState,
+          title: document.title,
+          bodyExists: !!document.body,
+          bodyTextLength: document.body?.innerText?.length || 0,
+          hrefOriginPath: location.origin + location.pathname
+        })
+      });
+      const p = probeResults?.find(item => item.frameId === 0) || probeResults?.[0];
+      probe = p?.result ? JSON.stringify(p.result) : "診断スクリプトも結果なし";
+    } catch (error) {
+      probe = "診断スクリプト失敗: " + (error?.message || String(error));
     }
-  });
-  if (!result?.result) throw new Error("ページ内容を読み取れませんでした。");
+    throw new Error("ページ読み取り結果が空でした。実行フレーム="+(result?.frameId ?? "不明")+"。追加診断: "+probe);
+  }
   if (result.result.view?.courseScope?.excludedParallelSelfStudy) throw new Error("対象外：自主学習と並行した授業と明示されたため、取得・保存を中止しました。");
   return { tab, data: result.result };
 }
