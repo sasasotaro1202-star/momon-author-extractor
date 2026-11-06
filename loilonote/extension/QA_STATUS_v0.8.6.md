@@ -13,7 +13,10 @@ Branch: `feature/loilonote-extractor`
 - Updated manifest, README, and INSTALL version labels to v0.8.6.
 
 ## Static checks
-- To be run against the committed files before considering this patch statically verified.
+- `popup.js` passed JavaScript syntax validation with `new Function(...)`.
+- `manifest.json` parsed successfully and reports version 0.8.6.
+- The injected function defines its own `normalize()` helper; both course-candidate label call sites use it, and no `clean(control.text...)` call remains in the injected function.
+- README and INSTALL version labels match v0.8.6.
 - A live Chrome capture test is still required after reloading the unpacked extension.
 
 ## Limitations
@@ -30,4 +33,4 @@ Branch: `feature/loilonote-extractor`
 - Only visible page content is read; downloaded data remains local.
 
 ## Status
-**NOT COMPLETE.** The identified code defect is patched. Static validation and a live Chrome capture are required before this fix can be considered verified.
+**PARTIALLY VERIFIED.** The source-level defect is patched and static checks pass. A live Chrome capture is still required; full automatic class collection is not implemented.
