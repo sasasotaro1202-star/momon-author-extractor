@@ -124,17 +124,23 @@ async function scanFolderTree() {
       const pageKey = () => location.origin+location.pathname;
       const folderRows = () => {
         const imgs=[...document.querySelectorAll('img[src*="MaterialFolder"],img[src*="materialfolder"]')].filter(visible);
-        const searchInput=[...document.querySelectorAll('input')].find(el=>visible(el) &&
+        const searchFields=[...document.querySelectorAll('input')].filter(el=>visible(el) &&
           /資料を検索|検索/.test((el.getAttribute("aria-label")||"")+" "+(el.getAttribute("placeholder")||"")));
+        const searchInput=searchFields.length===1?searchFields[0]:null;
+        const searchRect=searchInput?.getBoundingClientRect();
         const out=[], seen=new Set(), diagnostics=[];
         let excludedNavigationIconCount=0, unclassifiedIconCount=0;
         for(const img of imgs){
-          const beforeSearch=!!searchInput && !!(img.compareDocumentPosition(searchInput)&Node.DOCUMENT_POSITION_FOLLOWING);
           const rect=img.getBoundingClientRect();
-          if(beforeSearch){
+          // DOM順ではなく画面上の位置で階層表示と一覧を分離する。
+          // 一覧フォルダは検索欄の下にあることを必須条件とし、曖昧な配置は後段で停止する。
+          const aboveOrBesideSearch=!!searchRect &&
+            (rect.bottom <= searchRect.bottom + 3 || rect.top < searchRect.top);
+          if(aboveOrBesideSearch){
             excludedNavigationIconCount++;
-            diagnostics.push({classification:"navigation-or-breadcrumb",src:img.getAttribute("src")||"",
-              alt:img.alt||"",x:Math.round(rect.x),y:Math.round(rect.y)});
+            diagnostics.push({classification:"navigation-or-breadcrumb",reason:"icon-not-below-search-field",
+              src:img.getAttribute("src")||"",alt:img.alt||"",x:Math.round(rect.x),y:Math.round(rect.y),
+              searchBottom:Math.round(searchRect.bottom)});
             continue;
           }
           let node=img, chosen=null;
@@ -168,7 +174,8 @@ async function scanFolderTree() {
             src:img.getAttribute("src")||"",x:Math.round(rect.x),y:Math.round(rect.y)});
         }
         return {rows:out,iconCount:imgs.length,excludedNavigationIconCount,unclassifiedIconCount,diagnostics,
-          searchFieldFound:!!searchInput};
+          searchFieldFound:!!searchInput,searchFieldCount:searchFields.length,
+          searchFieldBounds:searchRect?{x:Math.round(searchRect.x),y:Math.round(searchRect.y),bottom:Math.round(searchRect.bottom)}:null};
       };
       const waitForPath = async (oldPath, timeout=9000) => {
         const end=Date.now()+timeout;
@@ -200,6 +207,8 @@ async function scanFolderTree() {
           excludedNavigationIconCount:detected.excludedNavigationIconCount,
           unclassifiedIconCount:detected.unclassifiedIconCount,
           searchFieldFound:detected.searchFieldFound,
+          searchFieldCount:detected.searchFieldCount,
+          searchFieldBounds:detected.searchFieldBounds,
           iconDiagnostics:detected.diagnostics,
           folders:rows.map((r,i)=>({label:r.label,index:i,iconSrc:r.iconSrc,tag:r.tag,className:r.className,href:r.href,dataAttributes:r.dataAttributes})),
           capturedAt:new Date().toISOString()
@@ -208,16 +217,30 @@ async function scanFolderTree() {
           warnings.push("検索欄より下の一覧に、フォルダとして安全に識別できないアイコンが "+detected.unclassifiedIconCount+"個あります。誤巡回防止のためこのページで停止しました。");
           stopped=true;return;
         }
-        if(detected.iconCount>0 && !detected.searchFieldFound){
-          warnings.push("資料検索欄を検出できません。階層表示と一覧の区別ができないため、このページで停止しました。");
+        if(detected.iconCount>0 && detected.searchFieldCount!==1){
+          warnings.push("可視の資料検索欄が1つに確定できません（検出数: "+detected.searchFieldCount+"）。階層表示と一覧の区別ができないため、このページで停止しました。");
           stopped=true;return;
         }
         for(let i=0;i<rows.length;i++){
           if(stopped) return;
-          const current=folderRows().rows;
+          const currentDetection=folderRows();
+          const current=currentDetection.rows;
           const target=current[i];
-          if(!target) continue;
+          const expected=rows[i];
+          if(!target || !expected || target.label!==expected.label || target.href!==expected.href){
+            warnings.push("巡回直前にフォルダ一覧の順序または識別情報が変化しました。誤クリック防止のため停止しました。");
+            stopped=true;return;
+          }
+          if(!currentDetection.searchFieldFound || currentDetection.searchFieldCount!==1 ||
+             currentDetection.unclassifiedIconCount>0){
+            warnings.push("巡回直前の画面構造を安全に再確認できませんでした。クリックせず停止しました。");
+            stopped=true;return;
+          }
           const parent=pageKey(), label=target.label;
+          if(!target.node.isConnected || !visible(target.node)){
+            warnings.push("フォルダ「"+label+"」のクリック対象が画面から消えたため停止しました。");
+            stopped=true;return;
+          }
           target.node.click();
           if(!await waitForPath(parent)){
             warnings.push("フォルダ「"+label+"」の画面遷移をURLで確認できず、安全のため巡回を停止しました。");
