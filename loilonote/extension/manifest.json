@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "LoiLoNote Local Reader",
-  "version": "0.7.2",
-  "description": "ロイロノートの表示中ページ保存と、階層表示を除外する診断付き制限フォルダ巡回を行う。",
+  "version": "0.7.3",
+  "description": "ロイロノートの表示中ページ保存と、画面位置と再確認で階層表示を除外する診断付き制限フォルダ巡回を行う。",
   "permissions": [
     "activeTab",
     "scripting",
