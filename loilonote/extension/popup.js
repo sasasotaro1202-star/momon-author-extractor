@@ -124,8 +124,19 @@ async function scanFolderTree() {
       const pageKey = () => location.origin+location.pathname;
       const folderRows = () => {
         const imgs=[...document.querySelectorAll('img[src*="MaterialFolder"],img[src*="materialfolder"]')].filter(visible);
-        const out=[], seen=new Set();
+        const searchInput=[...document.querySelectorAll('input')].find(el=>visible(el) &&
+          /資料を検索|検索/.test((el.getAttribute("aria-label")||"")+" "+(el.getAttribute("placeholder")||"")));
+        const out=[], seen=new Set(), diagnostics=[];
+        let excludedNavigationIconCount=0, unclassifiedIconCount=0;
         for(const img of imgs){
+          const beforeSearch=!!searchInput && !!(img.compareDocumentPosition(searchInput)&Node.DOCUMENT_POSITION_FOLLOWING);
+          const rect=img.getBoundingClientRect();
+          if(beforeSearch){
+            excludedNavigationIconCount++;
+            diagnostics.push({classification:"navigation-or-breadcrumb",src:img.getAttribute("src")||"",
+              alt:img.alt||"",x:Math.round(rect.x),y:Math.round(rect.y)});
+            continue;
+          }
           let node=img, chosen=null;
           for(let depth=0;depth<10 && node;depth++,node=node.parentElement){
             const style=getComputedStyle(node);
@@ -135,7 +146,13 @@ async function scanFolderTree() {
               if(label.length>=2 && label.length<=180){chosen=node;break;}
             }
           }
-          if(!chosen || seen.has(chosen)) continue;
+          if(!chosen || seen.has(chosen)){
+            unclassifiedIconCount++;
+            diagnostics.push({classification:chosen?"duplicate-click-target":"unclassified-list-icon",
+              src:img.getAttribute("src")||"",alt:img.alt||"",x:Math.round(rect.x),y:Math.round(rect.y),
+              nearestText:clean(img.parentElement?.innerText||"").slice(0,160)});
+            continue;
+          }
           seen.add(chosen);
           const attrs=Object.fromEntries([...chosen.attributes].filter(a=>a.name.startsWith("data-")).slice(0,12).map(a=>[a.name,a.value.slice(0,120)]));
           out.push({
@@ -147,8 +164,11 @@ async function scanFolderTree() {
             href:chosen instanceof HTMLAnchorElement?(new URL(chosen.href,location.href).origin===location.origin?new URL(chosen.href,location.href).pathname:""):"",
             dataAttributes:attrs
           });
+          diagnostics.push({classification:"folder-candidate",label:out[out.length-1].label,
+            src:img.getAttribute("src")||"",x:Math.round(rect.x),y:Math.round(rect.y)});
         }
-        return {rows:out,iconCount:imgs.length};
+        return {rows:out,iconCount:imgs.length,excludedNavigationIconCount,unclassifiedIconCount,diagnostics,
+          searchFieldFound:!!searchInput};
       };
       const waitForPath = async (oldPath, timeout=9000) => {
         const end=Date.now()+timeout;
@@ -177,11 +197,19 @@ async function scanFolderTree() {
           depth,ancestry,
           folderIconCount:detected.iconCount,
           detectedFolderCount:rows.length,
+          excludedNavigationIconCount:detected.excludedNavigationIconCount,
+          unclassifiedIconCount:detected.unclassifiedIconCount,
+          searchFieldFound:detected.searchFieldFound,
+          iconDiagnostics:detected.diagnostics,
           folders:rows.map((r,i)=>({label:r.label,index:i,iconSrc:r.iconSrc,tag:r.tag,className:r.className,href:r.href,dataAttributes:r.dataAttributes})),
           capturedAt:new Date().toISOString()
         });
-        if(detected.iconCount>0 && rows.length!==detected.iconCount){
-          warnings.push("フォルダアイコン "+detected.iconCount+"個のうち安全に識別できたものは "+rows.length+"個です。誤巡回防止のためこのページで停止しました。");
+        if(detected.unclassifiedIconCount>0){
+          warnings.push("検索欄より下の一覧に、フォルダとして安全に識別できないアイコンが "+detected.unclassifiedIconCount+"個あります。誤巡回防止のためこのページで停止しました。");
+          stopped=true;return;
+        }
+        if(detected.iconCount>0 && !detected.searchFieldFound){
+          warnings.push("資料検索欄を検出できません。階層表示と一覧の区別ができないため、このページで停止しました。");
           stopped=true;return;
         }
         for(let i=0;i<rows.length;i++){
