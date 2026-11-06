@@ -123,23 +123,32 @@ async function scanFolderTree() {
       const clean = s => (s||"").replace(/\s+/g," ").trim();
       const pageKey = () => location.origin+location.pathname;
       const folderRows = () => {
-        const imgs=[...document.querySelectorAll('img[src*="MaterialFolder"]')].filter(visible);
+        const imgs=[...document.querySelectorAll('img[src*="MaterialFolder"],img[src*="materialfolder"]')].filter(visible);
         const out=[], seen=new Set();
         for(const img of imgs){
           let node=img, chosen=null;
-          for(let depth=0;depth<9 && node;depth++,node=node.parentElement){
+          for(let depth=0;depth<10 && node;depth++,node=node.parentElement){
             const style=getComputedStyle(node);
             const clickable=node.matches("a,button,[role='button'],[onclick]") || style.cursor==="pointer";
-            if(clickable && node.querySelectorAll('img[src*="MaterialFolder"]').length===1){
-              const label=clean(node.innerText||node.getAttribute("aria-label")||"");
+            if(clickable && node.querySelectorAll('img[src*="MaterialFolder"],img[src*="materialfolder"]').length===1){
+              const label=clean(node.innerText||node.getAttribute("aria-label")||node.getAttribute("title")||"");
               if(label.length>=2 && label.length<=180){chosen=node;break;}
             }
           }
           if(!chosen || seen.has(chosen)) continue;
           seen.add(chosen);
-          out.push({node:chosen,label:clean(chosen.innerText||chosen.getAttribute("aria-label")||"").slice(0,180)});
+          const attrs=Object.fromEntries([...chosen.attributes].filter(a=>a.name.startsWith("data-")).slice(0,12).map(a=>[a.name,a.value.slice(0,120)]));
+          out.push({
+            node:chosen,
+            label:clean(chosen.innerText||chosen.getAttribute("aria-label")||chosen.getAttribute("title")||"").slice(0,180),
+            iconSrc:img.getAttribute("src")||"",
+            tag:chosen.tagName.toLowerCase(),
+            className:typeof chosen.className==="string"?chosen.className.slice(0,160):"",
+            href:chosen instanceof HTMLAnchorElement?(new URL(chosen.href,location.href).origin===location.origin?new URL(chosen.href,location.href).pathname:""):"",
+            dataAttributes:attrs
+          });
         }
-        return out;
+        return {rows:out,iconCount:imgs.length};
       };
       const waitForPath = async (oldPath, timeout=9000) => {
         const end=Date.now()+timeout;
@@ -160,17 +169,24 @@ async function scanFolderTree() {
         if(depth>maxDepth){warnings.push("深さ上限16に到達しました。");return;}
         visited.add(key);
         await sleep(450);
-        const rows=folderRows();
+        const detected=folderRows();
+        const rows=detected.rows;
         const text=document.body?.innerText||"";
         pages.push({
           url:key,title:document.title,text,
           depth,ancestry,
-          folders:rows.map((r,i)=>({label:r.label,index:i})),
+          folderIconCount:detected.iconCount,
+          detectedFolderCount:rows.length,
+          folders:rows.map((r,i)=>({label:r.label,index:i,iconSrc:r.iconSrc,tag:r.tag,className:r.className,href:r.href,dataAttributes:r.dataAttributes})),
           capturedAt:new Date().toISOString()
         });
+        if(detected.iconCount>0 && rows.length!==detected.iconCount){
+          warnings.push("フォルダアイコン "+detected.iconCount+"個のうち安全に識別できたものは "+rows.length+"個です。誤巡回防止のためこのページで停止しました。");
+          stopped=true;return;
+        }
         for(let i=0;i<rows.length;i++){
           if(stopped) return;
-          const current=folderRows();
+          const current=folderRows().rows;
           const target=current[i];
           if(!target) continue;
           const parent=pageKey(), label=target.label;
