@@ -161,9 +161,10 @@ async function scanFolderTree(confirmedClassName) {
     target: { tabId: tab.id },
     args: [confirmedClassName],
     func: async (confirmedClassName) => {
-      const visiblePageText = (document.body?.innerText || "").replace(/\s+/g," ").trim();
+      const visiblePageText = document.body?.innerText || "";
+      const visiblePageLines = visiblePageText.split(/\n+/).map(line=>line.replace(/\s+/g," ").trim()).filter(Boolean);
       if (!confirmedClassName || confirmedClassName.length > 100) return {blocked:true,reason:"授業名が未入力または長すぎます。"};
-      if (!visiblePageText.includes(confirmedClassName)) return {blocked:true,reason:"入力した授業名が現在の画面に完全一致で見つかりません。巡回を停止しました。"};
+      if (!visiblePageLines.includes(confirmedClassName)) return {blocked:true,reason:"入力した授業名と完全一致する表示行が現在の画面にありません。巡回を停止しました。"};
       if (visiblePageText.includes("自主学習と並行した授業")) return {blocked:true,reason:"対象外：自主学習と並行した授業の明示表示を検出"};
       
       const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -312,7 +313,7 @@ async function scanFolderTree(confirmedClassName) {
       await visit(0,[]);
       return {
         schema:"loilonote-folder-map-v1",
-        scopeVerification:{className:confirmedClassName,method:"user-confirmed normal class; exact class name matched visible page text",userConfirmedNormalClass:true,excludedParallelSelfStudyPhraseAbsent:true,warning:"画面上の文字列一致とユーザー確認によるゲートであり、LoiLoNote側の授業属性を機械的に証明するものではありません。"},
+        scopeVerification:{className:confirmedClassName,method:"user-confirmed normal class; exact class name matched one visible text line",userConfirmedNormalClass:true,excludedParallelSelfStudyPhraseAbsent:true,warning:"画面上の文字列一致とユーザー確認によるゲートであり、LoiLoNote側の授業属性を機械的に証明するものではありません。"},
         startedAt:pages[0]?.capturedAt||new Date().toISOString(),
         finishedAt:new Date().toISOString(),
         startUrl:pages[0]?.url||pageKey(),
