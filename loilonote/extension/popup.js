@@ -164,3 +164,8 @@ exportButton.addEventListener("click", async () => {
     exportButton.disabled = false;
   }
 });
+
+const openArchiveButton = document.getElementById("openArchive");
+openArchiveButton?.addEventListener("click", () => {
+  chrome.tabs.create({url: chrome.runtime.getURL("archive.html")});
+});
