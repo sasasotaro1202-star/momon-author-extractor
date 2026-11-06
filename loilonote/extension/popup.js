@@ -59,7 +59,10 @@ async function capturePage() {
       const titleView = titleSignals.length===1 ? titleSignals[0] : "";
       const signals = [...new Set([activeView,titleView,routeView].filter(Boolean))];
       const classificationConflict = signals.length>1;
+      const isCourseHome = location.pathname === "/_/" &&
+        (bodyLines.includes("授業一覧") || bodyLines.includes("閉講した授業"));
       const currentView = location.pathname.includes("/material-box/") ? "資料箱" :
+        isCourseHome ? "授業一覧" :
         classificationConflict ? "判定保留" : (activeView || titleView || routeView || "未分類");
       const courseContext = bodyLines.find(x=>/\/\s*[^/]+$/.test(x) && x.length<120) || "";
       const nodes = [...document.querySelectorAll("body *")].filter(visible);
@@ -84,6 +87,18 @@ async function capturePage() {
           bounds: {x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)}
         };
       }).filter(x => x.text || x.href || x.ariaLabel || x.title).slice(0,2000);
+      // On the course-home screen, collect clickable course-like labels as diagnostics only.
+      // Do not click them or assume every visible label is a course.
+      const courseCandidates = isCourseHome ? controls.filter(control => {
+        const label = clean(control.text || control.ariaLabel || control.title);
+        return label.length > 0 && label.length <= 100 &&
+          bodyLines.includes(label) &&
+          !["授業一覧","資料箱","提出","送る","閉講した授業","自主学習","掲示板","クラス参加コードを入力"].includes(label);
+      }).map(control => ({
+        label:clean(control.text || control.ariaLabel || control.title),
+        tag:control.tag,role:control.role,href:control.href,
+        className:control.className,bounds:control.bounds
+      })) : [];
       const images = [...document.querySelectorAll("img")].filter(visible).map(img => ({
         alt: img.alt || "", src: safeLocalUrl(img.currentSrc || img.src || ""),
         width: img.naturalWidth || 0, height: img.naturalHeight || 0
@@ -98,12 +113,13 @@ async function capturePage() {
       const replacement = (text.match(/\uFFFD/g) || []).length;
       const formulaHints = (text.match(/[=＋－×÷√∫∑≤≥≠]/g) || []).length;
       return {
-        schema:"loilonote-local-archive-v6",
+        schema:"loilonote-local-archive-v7",
         capturedAt:new Date().toISOString(),
         url:safePageUrl,
         urlSanitization:"same-origin origin+pathname only; query and fragment removed",
         view:{category:currentView,routeHint:routeView,activeTab:activeView,titleHint:titleView,
           classificationConflict,activeTabCandidates:uniqueActiveTabs,courseContext,visibleSections,
+          courseCandidateCount:courseCandidates.length,courseCandidates,
           observedTabParameter:!!tabParam,classificationMethod:"visible active-tab/title signals reconciled with route hint; conflicts fail closed"},
         title:document.title,
         headings:[...document.querySelectorAll("h1,h2,h3,[role='heading']")].filter(visible).map(textOf).filter(Boolean),
