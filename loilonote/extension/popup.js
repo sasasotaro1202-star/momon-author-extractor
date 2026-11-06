@@ -51,7 +51,7 @@ async function capturePage() {
           href: el instanceof HTMLAnchorElement ? el.href : "",
           className: typeof el.className === "string" ? el.className.slice(0,180) : "",
           dataAttributes: Object.fromEntries([...el.attributes].filter(a => a.name.startsWith("data-")).slice(0,20).map(a => [a.name,a.value.slice(0,160)])),
-          outerHTML: el.outerHTML.slice(0,1200),
+          outerHTML: (() => { const clone = el.cloneNode(false); for (const a of [...clone.attributes]) if (["href","src","srcset"].includes(a.name.toLowerCase())) clone.removeAttribute(a.name); return clone.outerHTML.slice(0,1200); })(),
           bounds: {x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)}
         };
       }).filter(x => x.text || x.href || x.ariaLabel || x.title).slice(0,2000);
