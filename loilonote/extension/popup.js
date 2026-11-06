@@ -35,7 +35,7 @@ async function capturePage() {
         .replace(/\s+/g, " ").trim();
       const nodes = [...document.querySelectorAll("body *")].filter(visible);
       const links = [...document.querySelectorAll("a[href]")].filter(visible).map(a => ({
-        text: textOf(a), href: a.href
+        text: textOf(a), href: (() => { const u = new URL(a.href); return u.origin + u.pathname; })()
       })).filter(x => x.href.startsWith(location.origin));
       const controls = nodes.filter(el =>
         el.matches("a,button,[role],[tabindex],[onclick]") ||
@@ -50,11 +50,13 @@ async function capturePage() {
           title: el.getAttribute("title") || "",
           href: el instanceof HTMLAnchorElement ? el.href : "",
           className: typeof el.className === "string" ? el.className.slice(0,180) : "",
+          dataAttributes: Object.fromEntries([...el.attributes].filter(a => a.name.startsWith("data-")).slice(0,20).map(a => [a.name,a.value.slice(0,160)])),
+          outerHTML: el.outerHTML.slice(0,1200),
           bounds: {x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)}
         };
       }).filter(x => x.text || x.href || x.ariaLabel || x.title).slice(0,2000);
       const images = [...document.querySelectorAll("img")].filter(visible).map(img => ({
-        alt: img.alt || "", src: img.currentSrc || img.src || "",
+        alt: img.alt || "", src: (() => { try { const u = new URL(img.currentSrc || img.src || "", location.href); return u.origin + u.pathname; } catch { return ""; } })(),
         width: img.naturalWidth || 0, height: img.naturalHeight || 0
       }));
       const tables = [...document.querySelectorAll("table")].filter(visible).map(t => textOf(t));
@@ -67,7 +69,7 @@ async function capturePage() {
       const replacement = (text.match(/\uFFFD/g) || []).length;
       const formulaHints = (text.match(/[=＋－×÷√∫∑≤≥≠]/g) || []).length;
       return {
-        schema:"loilonote-local-archive-v3",
+        schema:"loilonote-local-archive-v4",
         capturedAt:new Date().toISOString(),
         url:location.href,
         title:document.title,
@@ -87,7 +89,7 @@ async function capturePage() {
             ...(!text.length?["本文テキストが取得できていません。"]:[])
           ]
         },
-        safety:"表示中の可視DOMのみ。Cookie・認証情報・非表示アプリ状態の取得、クリック、送信、編集、削除、外部通信は行いません。"
+        safety:"表示中の可視DOMのみ。URLのクエリ・フラグメントは保存しません。Cookie・認証情報・非表示アプリ状態の取得、クリック、送信、編集、削除、外部通信は行いません。"
       };
     }
   });
