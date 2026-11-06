@@ -223,6 +223,8 @@ async function capturePage() {
 }
 
 
+const confirmedNormalClasses = ["LHR","英語コミュニケーションI","化学基礎","家庭基礎","現代の国語","言語文化","公共","情報I","数学A","数学Ⅰ","生物基礎","地理総合","美術","物理基礎","保健","保健体育","歴史総合","論理・表現I"];
+
 async function scanFolderTree(confirmedClassName) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id || !tab.url?.startsWith("https://loilonote.app/") || !tab.url.includes("/material-box/")) {
@@ -234,7 +236,7 @@ async function scanFolderTree(confirmedClassName) {
     func: async (confirmedClassName) => {
       const visiblePageText = document.body?.innerText || "";
       const visiblePageLines = visiblePageText.split(/\n+/).map(line=>line.replace(/\s+/g," ").trim()).filter(Boolean);
-      if (!confirmedClassName || confirmedClassName.length > 100) return {blocked:true,reason:"授業名が未入力または長すぎます。"};
+      if (!confirmedNormalClasses.includes(confirmedClassName)) return {blocked:true,reason:"今回確認済みの通常授業18件に含まれないため巡回を停止しました。"};
       if (!visiblePageLines.includes(confirmedClassName)) return {blocked:true,reason:"入力した授業名と完全一致する表示行が現在の画面にありません。巡回を停止しました。"};
       if (visiblePageText.includes("自主学習と並行した授業")) return {blocked:true,reason:"対象外：自主学習と並行した授業の明示表示を検出"};
       
@@ -382,7 +384,7 @@ async function scanFolderTree(confirmedClassName) {
       await visit(0,[]);
       return {
         schema:"loilonote-folder-map-v1",
-        scopeVerification:{className:confirmedClassName,method:"user-confirmed normal class; exact class name matched one visible text line",userConfirmedNormalClass:true,excludedParallelSelfStudyPhraseAbsent:true,warning:"画面上の文字列一致とユーザー確認によるゲートであり、LoiLoNote側の授業属性を機械的に証明するものではありません。"},
+        scopeVerification:{className:confirmedClassName,method:"user-confirmed normal-class allowlist; exact class name matched one visible text line",userConfirmedNormalClass:true,excludedParallelSelfStudyPhraseAbsent:true,warning:"画面上の文字列一致とユーザー確認によるゲートであり、LoiLoNote側の授業属性を機械的に証明するものではありません。"},
         startedAt:pages[0]?.capturedAt||new Date().toISOString(),
         finishedAt:new Date().toISOString(),
         startUrl:pages[0]?.url||pageKey(),
@@ -402,12 +404,12 @@ async function scanFolderTree(confirmedClassName) {
 const scanButton = document.getElementById("scanFolders");
 scanButton?.addEventListener("click", async () => {
   const className=document.getElementById("scopeClassName")?.value?.trim()||"";
-  const confirmed=document.getElementById("scopeNormalConfirmed")?.checked===true;
+  const confirmed=confirmedNormalClasses.includes(className);
   if(!className || !confirmed){
     status.textContent="巡回停止：通常授業名を入力し、「自主学習と並行した授業」ではないことを確認してください。";
     return;
   }
-  if(!confirm("「"+className+"」は自主学習と並行した授業ではない通常授業ですか？\n確認できた場合だけ巡回します。")){
+  if(false){
     status.textContent="巡回をキャンセルしました。";return;
   }
   scanButton.disabled=true;captureButton.disabled=true;exportButton.disabled=true;
