@@ -89,8 +89,6 @@ async function capturePage() {
           title: el.getAttribute("title") || "",
           href: el instanceof HTMLAnchorElement ? safeLocalUrl(el.href) : "",
           className: typeof el.className === "string" ? el.className.slice(0,180) : "",
-          dataAttributes: Object.fromEntries([...el.attributes].filter(a => a.name.startsWith("data-")).slice(0,20).map(a => [a.name,a.value.slice(0,160)])),
-          outerHTML: (() => { const clone = el.cloneNode(false); for (const a of [...clone.attributes]) if (["href","src","srcset"].includes(a.name.toLowerCase())) clone.removeAttribute(a.name); return clone.outerHTML.slice(0,1200); })(),
           contextText: (() => { let n=el, parts=[]; for(let i=0;i<4&&n;i++,n=n.parentElement){const t=(n.innerText||"").replace(/\s+/g," ").trim();if(t&&t.length<=500)parts.push(t);} return [...new Set(parts)].join(" | ").slice(0,1200); })(),
           bounds: {x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)}
         };
@@ -285,15 +283,13 @@ async function scanFolderTree(confirmedClassName) {
             continue;
           }
           seen.add(chosen);
-          const attrs=Object.fromEntries([...chosen.attributes].filter(a=>a.name.startsWith("data-")).slice(0,12).map(a=>[a.name,a.value.slice(0,120)]));
           out.push({
             node:chosen,
             label:clean(chosen.innerText||chosen.getAttribute("aria-label")||chosen.getAttribute("title")||"").slice(0,180),
             iconSrc:img.getAttribute("src")||"",
             tag:chosen.tagName.toLowerCase(),
             className:typeof chosen.className==="string"?chosen.className.slice(0,160):"",
-            href:chosen instanceof HTMLAnchorElement?(new URL(chosen.href,location.href).origin===location.origin?new URL(chosen.href,location.href).pathname:""):"",
-            dataAttributes:attrs
+            href:chosen instanceof HTMLAnchorElement?(new URL(chosen.href,location.href).origin===location.origin?new URL(chosen.href,location.href).pathname:""):""
           });
           diagnostics.push({classification:"folder-candidate",label:out[out.length-1].label,
             src:img.getAttribute("src")||"",x:Math.round(rect.x),y:Math.round(rect.y)});
@@ -335,7 +331,7 @@ async function scanFolderTree(confirmedClassName) {
           searchFieldCount:detected.searchFieldCount,
           searchFieldBounds:detected.searchFieldBounds,
           iconDiagnostics:detected.diagnostics,
-          folders:rows.map((r,i)=>({label:r.label,index:i,iconSrc:r.iconSrc,tag:r.tag,className:r.className,href:r.href,dataAttributes:r.dataAttributes})),
+          folders:rows.map((r,i)=>({label:r.label,index:i,iconSrc:r.iconSrc,tag:r.tag,className:r.className,href:r.href})),
           capturedAt:new Date().toISOString()
         });
         if(detected.unclassifiedIconCount>0){
