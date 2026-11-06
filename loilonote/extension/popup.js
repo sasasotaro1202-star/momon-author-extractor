@@ -120,7 +120,7 @@ async function scanFolderTree() {
         const s=getComputedStyle(el), r=el.getBoundingClientRect();
         return s.display!=="none" && s.visibility!=="hidden" && Number(s.opacity)!==0 && r.width>0 && r.height>0;
       };
-      const clean = s => (s||"").replace(/\\s+/g," ").trim();
+      const clean = s => (s||"").replace(/\s+/g," ").trim();
       const pageKey = () => location.origin+location.pathname;
       const folderRows = () => {
         const imgs=[...document.querySelectorAll('img[src*="MaterialFolder"]')].filter(visible);
@@ -213,9 +213,9 @@ scanButton?.addEventListener("click", async () => {
     const id=await saveBlob(new Blob([JSON.stringify(data,null,2)],{type:"application/json;charset=utf-8"}),
       "LoiLoNote_FolderMap_"+stamp()+".json");
     status.textContent=(data.complete?"フォルダ巡回完了":"【未完了】フォルダ巡回を停止")+
-      "\\n巡回ページ "+data.pageCount+"件 / ダウンロードID "+id+
-      (data.warnings.length?"\\n警告: "+data.warnings.join(" / "):"")+
-      "\\n注意: 教材本文・画像・添付ファイルの取得はまだ含みません。";
+      "\n巡回ページ "+data.pageCount+"件 / ダウンロードID "+id+
+      (data.warnings.length?"\n警告: "+data.warnings.join(" / "):"")+
+      "\n注意: 教材本文・画像・添付ファイルの取得はまだ含みません。";
   }catch(error){status.textContent="フォルダ巡回失敗: "+(error.message||error);}
   finally{scanButton.disabled=false;captureButton.disabled=false;exportButton.disabled=false;}
 });
