@@ -1,4 +1,4 @@
-# LoiLoNote Local Reader v0.8.0
+# LoiLoNote Local Reader v0.8.1
 
 ## 目的
 LoiLoNoteでユーザーが表示しているページを、可視DOM情報と画面画像としてローカル保存するChrome拡張機能です。
@@ -29,7 +29,7 @@ LoiLoNoteでユーザーが表示しているページを、可視DOM情報と�
 - JSONを読み込んで資料名・URL・本文を検索するローカル資料検索画面（chrome.storage.local）
 
 ## 制限
-- v0.8.0の画面種別分類はURLの `tab` 値（standardNoteList / sharedNoteList / submitBox / timeline）と資料箱パスに基づく補助メタデータです。各タブの全件巡回や自動切替を実装したものではありません。
+- v0.8.1の画面種別分類はURLの `tab` 値（standardNoteList / sharedNoteList / submitBox / timeline）と資料箱パスに基づく補助メタデータです。各タブの全件巡回や自動切替を実装したものではありません。
 - フォルダ構成巡回は初期実装で、実際のLoiLoNote上での動作検証は未実施です。検索欄より上の階層表示アイコンを画面座標で除外します。検索欄が一意に見つからない場合、一覧内に未識別アイコンがある場合、クリック直前に対象ラベル・URLが変化した場合は誤巡回を避けるため停止します。
 - フォルダ一覧ページの巡回のみで、個々の教材本文・画像・添付ファイルを自動取得しません。
 - 全教科を巡回するには、資料箱の教科一覧ページから開始する必要があります。
