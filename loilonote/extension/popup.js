@@ -48,7 +48,10 @@ async function capturePage() {
         submitBox:"提出箱", timeline:"タイムライン"
       };
       const routeView = viewMap[tabParam] || "";
-      const bodyLines = (document.body?.innerText || "").split(/\n+/).map(x=>x.trim()).filter(Boolean);
+      const pageText = document.body?.innerText || "";
+      const bodyLines = pageText.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+      const parallelSelfStudyMarker = "自主学習と並行した授業";
+      const isParallelSelfStudyLesson = pageText.includes(parallelSelfStudyMarker);
       const knownSections = ["ノート","共有ノート","提出箱","タイムライン"];
       const visibleSections = knownSections.filter(label => bodyLines.includes(label));
       const activeTabLabels = [...document.querySelectorAll('[role="tab"][aria-selected="true"],[role="tab"][aria-current="page"],[aria-selected="true"],[aria-current="page"]')]
@@ -84,6 +87,7 @@ async function capturePage() {
           className: typeof el.className === "string" ? el.className.slice(0,180) : "",
           dataAttributes: Object.fromEntries([...el.attributes].filter(a => a.name.startsWith("data-")).slice(0,20).map(a => [a.name,a.value.slice(0,160)])),
           outerHTML: (() => { const clone = el.cloneNode(false); for (const a of [...clone.attributes]) if (["href","src","srcset"].includes(a.name.toLowerCase())) clone.removeAttribute(a.name); return clone.outerHTML.slice(0,1200); })(),
+          contextText: (() => { let n=el, parts=[]; for(let i=0;i<4&&n;i++,n=n.parentElement){const t=(n.innerText||"").replace(/\s+/g," ").trim();if(t&&t.length<=500)parts.push(t);} return [...new Set(parts)].join(" | ").slice(0,1200); })(),
           bounds: {x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)}
         };
       }).filter(x => x.text || x.href || x.ariaLabel || x.title).slice(0,2000);
@@ -94,11 +98,10 @@ async function capturePage() {
         return label.length > 0 && label.length <= 100 &&
           bodyLines.includes(label) &&
           !["授業一覧","資料箱","提出","送る","閉講した授業","自主学習","掲示板","クラス参加コードを入力"].includes(label);
-      }).map(control => ({
-        label:clean(control.text || control.ariaLabel || control.title),
-        tag:control.tag,role:control.role,href:control.href,
-        className:control.className,bounds:control.bounds
-      })) : [];
+      }).map(control => {
+        const excluded = (control.contextText||"").includes(parallelSelfStudyMarker);
+        return {label:clean(control.text || control.ariaLabel || control.title),tag:control.tag,role:control.role,href:control.href,className:control.className,bounds:control.bounds,scopeStatus:excluded?"対象外":"判定保留",scopeReason:excluded?"自主学習と並行した授業の明示表示を検出":"通常授業であることを可視情報だけで確認できないため巡回禁止"};
+      }) : [];
       const images = [...document.querySelectorAll("img")].filter(visible).map(img => ({
         alt: img.alt || "", src: safeLocalUrl(img.currentSrc || img.src || ""),
         width: img.naturalWidth || 0, height: img.naturalHeight || 0
@@ -120,6 +123,7 @@ async function capturePage() {
         view:{category:currentView,routeHint:routeView,activeTab:activeView,titleHint:titleView,
           classificationConflict,activeTabCandidates:uniqueActiveTabs,courseContext,visibleSections,
           courseCandidateCount:courseCandidates.length,courseCandidates,
+          courseScope:{policy:"通常授業のみ。自主学習と並行した授業は対象外。通常授業と確認できない候補は判定保留として巡回禁止。",excludedParallelSelfStudy:isParallelSelfStudyLesson,excludedMarker:isParallelSelfStudyLesson?parallelSelfStudyMarker:"",holdCount:courseCandidates.filter(x=>x.scopeStatus==="判定保留").length,excludedCount:courseCandidates.filter(x=>x.scopeStatus==="対象外").length},
           observedTabParameter:!!tabParam,classificationMethod:"visible active-tab/title signals reconciled with route hint; conflicts fail closed"},
         title:document.title,
         headings:[...document.querySelectorAll("h1,h2,h3,[role='heading']")].filter(visible).map(textOf).filter(Boolean),
@@ -143,6 +147,7 @@ async function capturePage() {
     }
   });
   if (!result?.result) throw new Error("ページ内容を読み取れませんでした。");
+  if (result.result.view?.courseScope?.excludedParallelSelfStudy) throw new Error("対象外：自主学習と並行した授業と明示されたため、取得・保存を中止しました。");
   return { tab, data: result.result };
 }
 
@@ -155,6 +160,7 @@ async function scanFolderTree() {
   const [result] = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: async () => {
+      if ((document.body?.innerText || "").includes("自主学習と並行した授業")) return {blocked:true,reason:"対象外：自主学習と並行した授業の明示表示を検出"};
       const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
       const visible = el => {
         const s=getComputedStyle(el), r=el.getBoundingClientRect();
@@ -312,6 +318,7 @@ async function scanFolderTree() {
     }
   });
   if(!result?.result) throw new Error("フォルダ巡回結果を取得できませんでした。");
+  if(result.result.blocked) throw new Error(result.result.reason);
   return {tab,data:result.result};
 }
 
