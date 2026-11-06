@@ -95,17 +95,58 @@ async function capturePage() {
           bounds: {x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)}
         };
       }).filter(x => x.text || x.href || x.ariaLabel || x.title).slice(0,2000);
-      // On the course-home screen, collect clickable course-like labels as diagnostics only.
-      // Do not click them or assume every visible label is a course.
-      const courseCandidates = isCourseHome ? controls.filter(control => {
-        const label = normalize(control.text || control.ariaLabel || control.title);
-        return label.length > 0 && label.length <= 100 &&
-          bodyLines.includes(label) &&
-          !["授業一覧","資料箱","提出","送る","閉講した授業","自主学習","掲示板","クラス参加コードを入力"].includes(label);
-      }).map(control => {
-        const excluded = (control.contextText||"").includes(parallelSelfStudyMarker);
-        return {label:normalize(control.text || control.ariaLabel || control.title),tag:control.tag,role:control.role,href:control.href,className:control.className,bounds:control.bounds,contextText:control.contextText||"",scopeStatus:excluded?"対象外":"判定保留",scopeReason:excluded?"自主学習と並行した授業の明示表示を検出":"通常授業であることを可視情報だけで確認できないため巡回禁止"};
-      }) : [];
+      // Course rows are taken only from the observed LoiLoNote row container.
+      // Never infer a course from nested buttons, badges, or arbitrary clickable descendants.
+      const courseRowSelector = "div.courseListItem";
+      const courseRows = isCourseHome
+        ? [...document.querySelectorAll(courseRowSelector)].filter(visible)
+        : [];
+      const ignoredCourseRowLabels = new Set([
+        "授業一覧","資料箱","提出","送る","提出済","未提出","閉講した授業",
+        "自主学習","掲示板","クラス参加コードを入力","…","⋯"
+      ]);
+      const courseCandidates = courseRows.map((row, index) => {
+        const rowLines = (row.innerText || "").split(/\n+/)
+          .map(normalize).filter(Boolean);
+        const possibleLabels = [...new Set(rowLines.filter(label =>
+          label.length > 0 && label.length <= 100 &&
+          bodyLines.includes(label) && !ignoredCourseRowLabels.has(label)
+        ))];
+        // A row is usable only when exactly one visible line identifies its course.
+        const label = possibleLabels.length === 1 ? possibleLabels[0] : "";
+        const rowText = normalize(row.innerText || "");
+        const ancestorTexts = [];
+        let ancestor = row;
+        for (let depth = 0; depth < 3 && ancestor; depth++, ancestor = ancestor.parentElement) {
+          const value = normalize(ancestor.innerText || "");
+          if (value && value.length <= 800) ancestorTexts.push(value);
+        }
+        const contextText = [...new Set([rowText, ...ancestorTexts])].join(" | ").slice(0, 1600);
+        const excluded = contextText.includes(parallelSelfStudyMarker);
+        return {
+          index,
+          label,
+          tag: row.tagName.toLowerCase(),
+          className: typeof row.className === "string" ? row.className.slice(0, 240) : "",
+          bounds: (() => {
+            const r = row.getBoundingClientRect();
+            return {x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)};
+          })(),
+          rowText,
+          contextText,
+          labelStatus: label ? "確定" : "判定保留",
+          labelCandidates: possibleLabels,
+          scopeStatus: excluded ? "対象外" : "判定保留",
+          scopeReason: excluded
+            ? "自主学習と並行した授業の明示表示を行または上位表示から検出"
+            : "授業行は特定できたが、通常授業であることを画面情報だけでは証明できないため巡回禁止"
+        };
+      });
+      const uniqueCourseLabels = [...new Set(courseCandidates.filter(x => x.label).map(x => x.label))];
+      const duplicateCourseLabels = courseCandidates
+        .filter(x => x.label && courseCandidates.filter(y => y.label === x.label).length > 1)
+        .map(x => x.label);
+      const unresolvedCourseRowCount = courseCandidates.filter(x => !x.label).length;
       const images = [...document.querySelectorAll("img")].filter(visible).map(img => ({
         alt: img.alt || "", src: safeLocalUrl(img.currentSrc || img.src || ""),
         width: img.naturalWidth || 0, height: img.naturalHeight || 0
@@ -126,7 +167,8 @@ async function capturePage() {
         urlSanitization:"same-origin origin+pathname only; query and fragment removed",
         view:{category:currentView,routeHint:routeView,activeTab:activeView,titleHint:titleView,
           classificationConflict,activeTabCandidates:uniqueActiveTabs,courseContext,visibleSections,
-          courseCandidateCount:courseCandidates.length,courseCandidates,
+          courseCandidateSelector:courseRowSelector,courseRowElementCount:courseRows.length,courseCandidateCount:uniqueCourseLabels.length,courseCandidates,
+          courseInventory:{selectorMatched:courseRows.length>0,uniqueResolvedCount:uniqueCourseLabels.length,unresolvedRowCount:unresolvedCourseRowCount,duplicateLabels:[...new Set(duplicateCourseLabels)],inventoryStatus:courseRows.length===0?"SELECTOR_NOT_FOUND":unresolvedCourseRowCount>0?"PARTIAL_REVIEW_REQUIRED":duplicateCourseLabels.length>0?"DUPLICATE_LABEL_REVIEW_REQUIRED":"ROWS_EXTRACTED_SCOPE_UNVERIFIED"},
           courseScope:{policy:"通常授業のみ。自主学習と並行した授業および自主学習自体は対象外。通常授業と確認できない候補は判定保留として巡回禁止。",excludedParallelSelfStudy:isParallelSelfStudyLesson,excludedMarker:isParallelSelfStudyLesson?parallelSelfStudyMarker:"",selfStudyEntryVisible:bodyLines.includes("自主学習"),holdCount:courseCandidates.filter(x=>x.scopeStatus==="判定保留").length,excludedCount:courseCandidates.filter(x=>x.scopeStatus==="対象外").length},
           observedTabParameter:!!tabParam,classificationMethod:"visible active-tab/title signals reconciled with route hint; conflicts fail closed"},
         title:document.title,
