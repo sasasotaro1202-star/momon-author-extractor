@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "LoiLoNote Local Reader",
-  "version": "0.6.0",
-  "description": "ロイロノートの可視ページをURL情報を除去してローカル保存し、DOM診断と取得品質を記録する。",
+  "version": "0.7.0",
+  "description": "ロイロノートの表示中ページ保存と、ユーザー開始による制限付きフォルダ構成巡回を行う。",
   "permissions": [
     "activeTab",
     "scripting",
