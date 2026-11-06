@@ -1,10 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "LoiLoNote Local Reader (Prototype)",
-  "version": "0.1.0",
-  "description": "Exports visible LoiLoNote page text and visible links locally.",
-  "permissions": ["activeTab", "scripting", "downloads"],
-  "host_permissions": ["https://loilonote.app/*"],
+  "name": "LoiLoNote Local Reader",
+  "version": "0.2.0",
+  "description": "Inspects visible LoiLoNote page text and navigation candidates locally.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://loilonote.app/*"
+  ],
   "action": {
     "default_title": "LoiLoNote Local Reader",
     "default_popup": "popup.html"
