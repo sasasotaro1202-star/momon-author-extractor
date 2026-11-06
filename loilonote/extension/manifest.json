@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "LoiLoNote Local Reader",
-  "version": "0.2.0",
-  "description": "Inspects visible LoiLoNote page text and navigation candidates locally.",
+  "version": "0.3.0",
+  "description": "ロイロノートの表示中資料をローカル保存し、本文・画像・数式の取得品質を記録する。",
   "permissions": [
     "activeTab",
     "scripting",
-    "downloads"
+    "downloads",
+    "storage"
   ],
   "host_permissions": [
     "https://loilonote.app/*"
