@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LoiLoNote Local Reader",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "ロイロノートの表示中資料をローカル保存し、本文・画像・数式の取得品質を記録する。",
   "permissions": [
     "activeTab",
