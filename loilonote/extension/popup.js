@@ -27,6 +27,7 @@ async function capturePage() {
       target: { tabId: tab.id, frameIds: [0] },
       world: "ISOLATED",
       func: () => {
+      const normalize = (value) => (value || "").replace(/\s+/g, " ").trim();
       const visible = (el) => {
         const s = getComputedStyle(el);
         const r = el.getBoundingClientRect();
@@ -97,7 +98,7 @@ async function capturePage() {
       // On the course-home screen, collect clickable course-like labels as diagnostics only.
       // Do not click them or assume every visible label is a course.
       const courseCandidates = isCourseHome ? controls.filter(control => {
-        const label = clean(control.text || control.ariaLabel || control.title);
+        const label = normalize(control.text || control.ariaLabel || control.title);
         return label.length > 0 && label.length <= 100 &&
           bodyLines.includes(label) &&
           !["授業一覧","資料箱","提出","送る","閉講した授業","自主学習","掲示板","クラス参加コードを入力"].includes(label);
