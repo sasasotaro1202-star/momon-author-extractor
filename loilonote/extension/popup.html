@@ -16,14 +16,14 @@
   </style>
 </head>
 <body>
-  <h1>LoiLoNote Local Reader v0.7.2</h1>
+  <h1>LoiLoNote Local Reader v0.7.3</h1>
   <p>表示中ページの本文・画面画像・画面構造診断をローカル保存します。URLは同一オリジンのパスだけ保存し、クエリ・フラグメントと外部URLは保存しません。</p>
   <button id="scanFolders">フォルダ構成を自動巡回</button>
   <button id="capture">このページを取得・保存</button>
   <button id="export" class="secondary">保存済み全ページの索引を出力</button>
   <button id="openArchive" class="secondary">資料検索画面を開く</button>
   <div id="status" role="status">対象ページを開いてから取得してください。</div>
-  <small>フォルダ巡回はユーザー開始時のみ実行し、検索欄より上の階層表示アイコンは除外し、一覧内の未識別アイコンがある場合は停止します。教材本文の一括取得は未対応です。ログイン操作・Cookie取得・外部送信はしません。画面画像は表示範囲のみです。数式等は原資料との照合が必要です。</small>
+  <small>フォルダ巡回はユーザー開始時のみ実行し、検索欄より上にある階層表示アイコンを画面位置で除外し、検索欄が一意でない場合・未識別アイコンがある場合・クリック直前に一覧が変化した場合は停止します。教材本文の一括取得は未対応です。ログイン操作・Cookie取得・外部送信はしません。画面画像は表示範囲のみです。数式等は原資料との照合が必要です。</small>
   <script src="popup.js"></script>
 </body>
 </html>
