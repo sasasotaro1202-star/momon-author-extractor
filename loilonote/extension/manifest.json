@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LoiLoNote Local Reader",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "description": "ロイロノートの表示中ページ保存、授業対象範囲の除外判定、画面種別の安全な分類、制限付きフォルダ巡回を行う。",
   "permissions": [
     "activeTab",
