@@ -41,6 +41,17 @@ async function capturePage() {
         } catch { return ""; }
       };
       const safePageUrl = location.origin + location.pathname;
+      // URL query is inspected only to classify the current view; it is never stored.
+      const tabParam = new URL(location.href).searchParams.get("tab") || "";
+      const viewMap = {
+        standardNoteList:"ノート", sharedNoteList:"共有ノート",
+        submitBox:"提出箱", timeline:"タイムライン"
+      };
+      const currentView = viewMap[tabParam] || (location.pathname.includes("/material-box/") ? "資料箱" : "未分類");
+      const bodyLines = (document.body?.innerText || "").split(/\n+/).map(x=>x.trim()).filter(Boolean);
+      const courseContext = bodyLines.find(x=>/\/\s*[^/]+$/.test(x) && x.length<120) || "";
+      const knownSections = ["ノート","共有ノート","提出箱","タイムライン"];
+      const visibleSections = knownSections.filter(label => bodyLines.includes(label));
       const nodes = [...document.querySelectorAll("body *")].filter(visible);
       const links = [...document.querySelectorAll("a[href]")].filter(visible).map(a => ({
         text: textOf(a), href: safeLocalUrl(a.href)
@@ -77,10 +88,12 @@ async function capturePage() {
       const replacement = (text.match(/\uFFFD/g) || []).length;
       const formulaHints = (text.match(/[=＋－×÷√∫∑≤≥≠]/g) || []).length;
       return {
-        schema:"loilonote-local-archive-v5",
+        schema:"loilonote-local-archive-v6",
         capturedAt:new Date().toISOString(),
         url:safePageUrl,
         urlSanitization:"same-origin origin+pathname only; query and fragment removed",
+        view:{category:currentView,tabParameterRecognized:!!viewMap[tabParam] || currentView==="資料箱",
+          courseContext,visibleSections,observedTabParameter:!!tabParam},
         title:document.title,
         headings:[...document.querySelectorAll("h1,h2,h3,[role='heading']")].filter(visible).map(textOf).filter(Boolean),
         text, links, controls, images, tables, canvas,
