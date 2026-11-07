@@ -3,6 +3,8 @@
 ## Checks performed
 - Manifest version is 0.8.11.
 - popup.js passed a JavaScript syntax check using the Function constructor.
+- Fixed material-box route detection to accept the observed root URL `/_/material-box` (without requiring a trailing slash), as well as nested `/_/material-box/` paths.
+- Re-fetched popup.js after commit and confirmed both the initial-tab guard and in-page traversal guard accept the exact root route.
 - Popup has a fixed selection list of 18 confirmed normal classes.
 - Manifest has no background service worker and no content scripts.
 - Current permissions: activeTab, scripting, downloads, storage; host permission: https://loilonote.app/*.
