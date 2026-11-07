@@ -68,7 +68,7 @@ async function capturePage() {
       const classificationConflict = signals.length>1;
       const isCourseHome = location.pathname === "/_/" &&
         (bodyLines.includes("授業一覧") || bodyLines.includes("閉講した授業"));
-      const currentView = location.pathname.includes("/material-box/") ? "資料箱" :
+      const currentView = ((location.pathname === "/_/material-box") || location.pathname.startsWith("/_/material-box/")) ? "資料箱" :
         isCourseHome ? "授業一覧" :
         classificationConflict ? "判定保留" : (activeView || titleView || routeView || "未分類");
       const courseContext = bodyLines.find(x=>/\/\s*[^/]+$/.test(x) && x.length<120) || "";
@@ -227,7 +227,9 @@ const confirmedNormalClasses = ["LHR","英語コミュニケーションI","化�
 
 async function scanFolderTree(confirmedClassName) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id || !tab.url?.startsWith("https://loilonote.app/") || !tab.url.includes("/material-box/")) {
+  const tabPath = (() => { try { return new URL(tab?.url || "").pathname; } catch { return ""; } })();
+  const isMaterialBoxTab = tabPath === "/_/material-box" || tabPath.startsWith("/_/material-box/");
+  if (!tab?.id || !tab.url?.startsWith("https://loilonote.app/") || !isMaterialBoxTab) {
     throw new Error("LoiLoNoteの資料箱ページを開いてください。");
   }
   const [result] = await chrome.scripting.executeScript({
@@ -310,7 +312,7 @@ async function scanFolderTree(confirmedClassName) {
       let stopped=false;
       async function visit(depth, ancestry){
         const key=pageKey();
-        if(!key.includes("/material-box/")){
+        if(!(location.pathname === "/_/material-box" || location.pathname.startsWith("/_/material-box/"))){
           warnings.push("資料箱以外の画面へ遷移したため、安全のため停止しました。");
           stopped=true;return;
         }
